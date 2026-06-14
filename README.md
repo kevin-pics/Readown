@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# Readown
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern Markdown directory reader. Open a folder, browse its Markdown files in a collapsible tree, and read them rendered with syntax highlighting.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Browse a directory of `.md` files in a collapsible file tree
+- Rendered Markdown preview with GitHub-flavored Markdown and code syntax highlighting
+- Resizable sidebar (drag the divider to adjust width)
+- Switchable themes
+- Runs as a desktop app (Electron) or in a compatible browser via the File System Access API
+- Open a folder by drag-and-drop or with the folder button
 
-## React Compiler
+## Tech stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS v4
+- Electron
+- marked + DOMPurify + highlight.js for rendering
 
-## Expanding the ESLint configuration
+## Getting started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Install dependencies:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Run in the browser (Vite dev server):
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Run as a desktop app (Electron + Vite):
+
+```bash
+npm run electron:dev
+```
+
+## Build
+
+Build the production app and package it with electron-builder:
+
+```bash
+npm run build
+```
+
+The packaged output is written to the `release/` directory.
+
+## Scripts
+
+- `npm run dev` - start the Vite dev server
+- `npm run electron:dev` - start Vite and launch Electron
+- `npm run build` - typecheck, build, and package the desktop app
+- `npm run lint` - run ESLint
+- `npm run preview` - preview the production build
+
+## Usage
+
+1. Launch the app.
+2. Click the folder icon (or drag a directory onto the window) to open a folder.
+3. Select a Markdown file from the tree to read it.
+4. Drag the divider between the sidebar and the content to resize.
