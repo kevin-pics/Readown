@@ -361,7 +361,7 @@ export function getStoredScale(): ScaleOption {
   } catch {
     // ignore storage access errors
   }
-  return scaleOptions[1]
+  return scaleOptions[2]
 }
 
 export function storeScale(scale: ScaleOption): void {
@@ -402,7 +402,7 @@ export function getStoredWidth(): WidthOption {
   } catch {
     // ignore storage access errors
   }
-  return widthOptions[1]
+  return widthOptions[3]
 }
 
 export function storeWidth(width: WidthOption): void {
