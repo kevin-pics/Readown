@@ -36,6 +36,18 @@ function createWindow(): BrowserWindow {
     win.webContents.openDevTools({ mode: 'detach' })
   }
 
+  win.webContents.on('before-input-event', (event, input) => {
+    if (
+      input.type === 'keyDown' &&
+      (input.meta || input.control) &&
+      !input.alt &&
+      input.key.toLowerCase() === 'w'
+    ) {
+      event.preventDefault()
+      win.webContents.send('close-current-tab')
+    }
+  })
+
   win.webContents.on('will-navigate', (e, url) => {
     if (url !== win.webContents.getURL()) {
       e.preventDefault()
@@ -107,6 +119,10 @@ async function scanDirectory(dirPath: string, basePath: string): Promise<TreeNod
     return a.type === 'directory' ? -1 : 1
   })
 }
+
+ipcMain.on('close-window', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+})
 
 ipcMain.handle('open-directory', async (): Promise<TreeNode[] | null> => {
   const result = await dialog.showOpenDialog({

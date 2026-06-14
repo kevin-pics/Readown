@@ -13,6 +13,8 @@ export interface ReadownAPI {
   scanDirectory: (dirPath: string) => Promise<FileNode[]>
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
+  onCloseTab: (callback: () => void) => () => void
+  closeWindow: () => void
 }
 
 const api: ReadownAPI = {
@@ -24,6 +26,12 @@ const api: ReadownAPI = {
     ipcRenderer.on('drag-drop-directory', handler)
     return () => ipcRenderer.removeListener('drag-drop-directory', handler)
   },
+  onCloseTab: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('close-current-tab', handler)
+    return () => ipcRenderer.removeListener('close-current-tab', handler)
+  },
+  closeWindow: () => ipcRenderer.send('close-window'),
 }
 
 contextBridge.exposeInMainWorld('readownAPI', api)

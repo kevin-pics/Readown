@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileNode } from '@/types/electron'
 import { FileTree } from '@/components/FileTree'
 import { MarkdownPreview } from '@/components/MarkdownPreview'
+import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { cn, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyTheme, getStoredTheme, storeTheme, type Theme } from '@/lib/theme'
 
@@ -113,8 +114,9 @@ export default function App() {
     return createBrowserAPI()
   })
   const [tree, setTree] = useState<FileNode[]>([])
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
-  const [content, setContent] = useState('')
+  const [tabs, setTabs] = useState<string[]>([])
+  const [activePath, setActivePath] = useState<string | null>(null)
+  const [contents, setContents] = useState<Record<string, string>>({})
   const [isDragging, setIsDragging] = useState(false)
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +126,65 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  useEffect(() => {
+    if (!activePath || contents[activePath] !== undefined) return
+    let cancelled = false
+    api
+      .readFile(activePath)
+      .then((text) => {
+        if (!cancelled) setContents((prev) => ({ ...prev, [activePath]: text }))
+      })
+      .catch((err) => {
+        if (!cancelled) setError((err as Error).message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activePath, contents, api])
+
+  const openFile = useCallback((path: string) => {
+    setError(null)
+    setActivePath(path)
+    setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
+  }, [])
+
+  const closeTab = useCallback(
+    (path: string) => {
+      const idx = tabs.indexOf(path)
+      const next = tabs.filter((p) => p !== path)
+      setTabs(next)
+      if (activePath === path) {
+        setActivePath(next.length ? next[Math.min(idx, next.length - 1)] : null)
+      }
+    },
+    [tabs, activePath]
+  )
+
+  const handleOpenRelative = useCallback(
+    (href: string) => {
+      if (!activePath) return
+      const resolved = resolveRelativePath(activePath, href)
+      if (resolved) openFile(resolved)
+    },
+    [activePath, openFile]
+  )
+
+  const closeActiveTab = useCallback(() => {
+    if (activePath) closeTab(activePath)
+    else window.readownAPI?.closeWindow()
+  }, [activePath, closeTab])
+
+  const closeActiveTabRef = useRef(closeActiveTab)
+  useEffect(() => {
+    closeActiveTabRef.current = closeActiveTab
+  }, [closeActiveTab])
+
+  useEffect(() => {
+    const electron = window.readownAPI
+    if (!electron?.onCloseTab) return
+    return electron.onCloseTab(() => closeActiveTabRef.current())
+  }, [])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -161,8 +222,9 @@ export default function App() {
               : source.name) ??
             'Directory'
         )
-        setSelectedPath(null)
-        setContent('')
+        setTabs([])
+        setActivePath(null)
+        setContents({})
       } catch (err) {
         setError((err as Error).message)
       }
@@ -183,22 +245,12 @@ export default function App() {
       if (!nodes) return
       setTree(nodes)
       setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
-      setSelectedPath(null)
-      setContent('')
+      setTabs([])
+      setActivePath(null)
+      setContents({})
       setError(null)
     } catch (err) {
       setError((err as Error).message)
-    }
-  }
-
-  const handleSelect = async (path: string) => {
-    setSelectedPath(path)
-    try {
-      const text = await api.readFile(path)
-      setContent(text)
-    } catch (err) {
-      setError((err as Error).message)
-      setContent('')
     }
   }
 
@@ -290,7 +342,7 @@ export default function App() {
 
         <ScrollArea className="flex-1">
           {!isEmpty ? (
-            <FileTree nodes={tree} selectedPath={selectedPath} onSelect={handleSelect} />
+            <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} />
           ) : (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
@@ -324,7 +376,7 @@ export default function App() {
         <div className="absolute inset-y-0 -left-1 -right-1" />
       </div>
 
-      <main className="relative flex-1 overflow-hidden bg-background">
+      <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
         {isDragging && (
           <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-primary/10">
             <div className="rounded-xl border-2 border-dashed border-primary bg-background/80 px-10 py-8 text-center shadow-lg backdrop-blur">
@@ -334,7 +386,14 @@ export default function App() {
             </div>
           </div>
         )}
-        <MarkdownPreview content={content} filePath={selectedPath} />
+        <TabBar tabs={tabs} activePath={activePath} onActivate={setActivePath} onClose={closeTab} />
+        <div className="flex-1 overflow-hidden">
+          <MarkdownPreview
+            content={activePath ? contents[activePath] ?? '' : ''}
+            filePath={activePath}
+            onOpenRelative={handleOpenRelative}
+          />
+        </div>
       </main>
     </div>
   )

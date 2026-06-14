@@ -1,14 +1,16 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { BookOpen, FileText } from 'lucide-react'
+import { isExternalHref } from '@/lib/utils'
 
 interface MarkdownPreviewProps {
   content: string
   filePath: string | null
+  onOpenRelative: (href: string) => void
 }
 
 marked.setOptions({
@@ -29,18 +31,54 @@ marked.use({
   },
 })
 
-export function MarkdownPreview({ content, filePath }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, onOpenRelative }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
     return DOMPurify.sanitize(raw)
   }, [content])
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollPositions = useRef<Record<string, number>>({})
+  const currentPathRef = useRef<string | null>(null)
+
+  const getViewport = () =>
+    scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]') ?? null
+
+  useEffect(() => {
+    const viewport = getViewport()
+    if (!viewport) return
+    const onScroll = () => {
+      if (currentPathRef.current) {
+        scrollPositions.current[currentPathRef.current] = viewport.scrollTop
+      }
+    }
+    viewport.addEventListener('scroll', onScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', onScroll)
+  }, [filePath])
+
+  useLayoutEffect(() => {
+    const viewport = getViewport()
+    if (!viewport) return
+    currentPathRef.current = filePath
+    viewport.scrollTop = filePath ? scrollPositions.current[filePath] ?? 0 : 0
+  }, [filePath, html])
+
   useEffect(() => {
     document.querySelectorAll<HTMLElement>('.prose pre code').forEach((block) => {
       hljs.highlightElement(block)
     })
   }, [html])
+
+  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    const anchor = (e.target as HTMLElement).closest('a')
+    if (!anchor) return
+    const href = anchor.getAttribute('href')
+    if (!href || href.startsWith('#')) return
+    if (isExternalHref(href)) return
+    e.preventDefault()
+    onOpenRelative(href)
+  }
 
   if (!filePath) {
     return (
@@ -57,14 +95,14 @@ export function MarkdownPreview({ content, filePath }: MarkdownPreviewProps) {
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea ref={scrollRef} className="h-full">
       <article className="prose max-w-none px-8 py-8">
         <div className="mb-6 flex items-center gap-2 border-b pb-4 text-xs text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{filePath}</span>
         </div>
         {html ? (
-          <div dangerouslySetInnerHTML={{ __html: html }} />
+          <div onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />
         ) : (
           <p className="text-muted-foreground">Empty file.</p>
         )}

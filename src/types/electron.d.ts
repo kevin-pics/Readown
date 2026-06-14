@@ -11,6 +11,8 @@ export interface ReadownAPI {
   scanDirectory: (dirPath: string) => Promise<FileNode[]>
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
+  onCloseTab: (callback: () => void) => () => void
+  closeWindow: () => void
 }
 
 declare global {
