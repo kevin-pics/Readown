@@ -8,17 +8,23 @@ interface TabBarProps {
   onClose: (path: string) => void
 }
 
+function fileNameWithoutExt(name: string): string {
+  const idx = name.lastIndexOf('.')
+  return idx > 0 ? name.slice(0, idx) : name
+}
+
 function computeLabels(tabs: string[]): Record<string, string> {
   const counts = new Map<string, number>()
   for (const path of tabs) {
-    const name = path.split(/[\\/]/).pop() ?? path
-    counts.set(name, (counts.get(name) ?? 0) + 1)
+    const rawName = path.split(/[\\/]/).pop() ?? path
+    counts.set(fileNameWithoutExt(rawName), (counts.get(fileNameWithoutExt(rawName)) ?? 0) + 1)
   }
 
   const labels: Record<string, string> = {}
   for (const path of tabs) {
     const parts = path.split(/[\\/]/)
-    const name = parts[parts.length - 1] ?? path
+    const rawName = parts[parts.length - 1] ?? path
+    const name = fileNameWithoutExt(rawName)
     labels[path] =
       (counts.get(name) ?? 0) > 1 && parts.length >= 2
         ? `${parts[parts.length - 2]}/${name}`
