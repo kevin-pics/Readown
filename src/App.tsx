@@ -7,7 +7,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
-import { applyFont, applyScale, applyTheme, getStoredFont, getStoredTheme, getStoredWidth, scaleOptions, storeFont, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
+import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -195,7 +195,7 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
   const [font, setFont] = useState<FontOption>(() => getStoredFont())
   const [contentWidth, setContentWidth] = useState<WidthOption>(() => getStoredWidth())
-  const [scale, setScale] = useState<ScaleOption>(() => scaleOptions[1])
+  const [scale, setScale] = useState<ScaleOption>(() => getStoredScale())
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openingDir, _setOpeningDir] = useState(false)
@@ -222,6 +222,7 @@ export default function App() {
   const handleScaleChange = useCallback((newScale: ScaleOption) => {
     setScale(newScale)
     applyScale(newScale)
+    storeScale(newScale)
   }, [])
 
   const setActivePathAndCheckModified = useCallback((path: string | null) => {

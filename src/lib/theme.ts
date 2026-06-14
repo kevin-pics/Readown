@@ -388,11 +388,11 @@ export interface WidthOption {
 }
 
 export const widthOptions: WidthOption[] = [
-  { id: '800', name: '800px', value: '800px' },
-  { id: '1000', name: '1000px', value: '1000px' },
-  { id: '1200', name: '1200px', value: '1200px' },
-  { id: '1400', name: '1400px', value: '1400px' },
-  { id: 'full', name: 'Full width', value: '100%' },
+  { id: '800', name: 'Compact', value: '800px' },
+  { id: '1000', name: 'Regular', value: '1000px' },
+  { id: '1200', name: 'Wide', value: '1200px' },
+  { id: '1400', name: 'Wider', value: '1400px' },
+  { id: 'full', name: 'Full', value: '100%' },
 ]
 
 const WIDTH_STORAGE_KEY = 'readown.width'

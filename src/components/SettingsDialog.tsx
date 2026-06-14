@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface SettingsDialogProps {
@@ -108,7 +107,10 @@ export function SettingsDialog({
         </div>
 
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-medium">Content width</label>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="block text-sm font-medium">Content width</label>
+            <span className="text-xs text-muted-foreground">{currentWidth.name}</span>
+          </div>
           <select
             tabIndex={-1}
             value={currentWidth.id}
@@ -156,9 +158,6 @@ export function SettingsDialog({
             </button>
           ))}
           </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Button size="sm" onClick={() => onOpenChange(false)}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>
