@@ -226,6 +226,13 @@ export default function App() {
       const idx = tabs.indexOf(path)
       const next = tabs.filter((p) => p !== path)
       setTabs(next)
+      setContents((prev) => {
+        const rest: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          if (key !== path) rest[key] = prev[key]
+        }
+        return rest
+      })
       if (activePath === path) {
         setActivePath(next.length ? next[Math.min(idx, next.length - 1)] : null)
       }
