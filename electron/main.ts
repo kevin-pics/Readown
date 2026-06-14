@@ -90,13 +90,14 @@ function setupMenu(): void {
       label: 'File',
       submenu: [
         {
+          label: 'Open…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => send('menu-open-directory'),
+        },
+        {
           label: 'New Window',
           accelerator: 'CmdOrCtrl+N',
           click: () => createWindow(),
-        },
-        {
-          label: 'Open Directory…',
-          click: () => send('menu-open-directory'),
         },
         { type: 'separator' },
         { label: 'Close Tab', click: () => send('close-current-tab') },
