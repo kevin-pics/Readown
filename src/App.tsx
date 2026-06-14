@@ -189,6 +189,11 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      if (e.key.toLowerCase() === 'w') {
+        e.preventDefault()
+        closeActiveTabRef.current()
+        return
+      }
       if (e.key < '1' || e.key > '9' || tabs.length === 0) return
       e.preventDefault()
       const n = Number(e.key)

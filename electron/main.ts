@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import type { IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
+import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { dirname, join, relative } from 'path'
@@ -36,18 +36,6 @@ function createWindow(): BrowserWindow {
     win.webContents.openDevTools({ mode: 'detach' })
   }
 
-  win.webContents.on('before-input-event', (event, input) => {
-    if (
-      input.type === 'keyDown' &&
-      (input.meta || input.control) &&
-      !input.alt &&
-      input.key.toLowerCase() === 'w'
-    ) {
-      event.preventDefault()
-      win.webContents.send('close-current-tab')
-    }
-  })
-
   win.webContents.on('will-navigate', (e, url) => {
     if (url !== win.webContents.getURL()) {
       e.preventDefault()
@@ -58,7 +46,38 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+function setupMenu(): void {
+  const isMac = process.platform === 'darwin'
+  const sendCloseTab = () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    win?.webContents.send('close-current-tab')
+  }
+
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: [{ label: 'Close Tab', click: sendCloseTab }],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac
+          ? [{ type: 'separator' as const }, { role: 'front' as const }]
+          : []),
+      ],
+    },
+  ]
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 app.whenReady().then(() => {
+  setupMenu()
   createWindow()
 
   app.on('activate', () => {
