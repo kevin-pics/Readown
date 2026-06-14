@@ -72,6 +72,14 @@
   pointer-events: none;
 }
 
+/* Ellipsis on the left so the end of the text (filename) stays visible */
+.truncate-start {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+}
+
 .prose {
   color: var(--prose-text, hsl(var(--foreground)));
 }

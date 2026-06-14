@@ -121,7 +121,7 @@ export default function App() {
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
-  const [sidebarWidth, setSidebarWidth] = useState(229)
+  const [sidebarWidth, setSidebarWidth] = useState(260)
 
   useEffect(() => {
     applyTheme(theme)
@@ -208,7 +208,7 @@ export default function App() {
     e.preventDefault()
     const startX = e.clientX
     const startWidth = sidebarWidth
-    const MIN_W = 210
+    const MIN_W = 260
     const MAX_W = Math.max(MIN_W, window.innerWidth * 0.6)
 
     const onMove = (ev: MouseEvent) => {
@@ -328,7 +328,7 @@ export default function App() {
     >
       <aside
         className="flex shrink-0 flex-col border-r bg-card"
-        style={{ width: `${sidebarWidth}px`, minWidth: '210px' }}
+        style={{ width: `${sidebarWidth}px`, minWidth: '260px' }}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2.5">
@@ -338,7 +338,7 @@ export default function App() {
             <div className="flex flex-col overflow-hidden">
               <h1 className="text-sm font-semibold leading-tight">Readown</h1>
               <span className="max-w-[100px] truncate text-xs text-muted-foreground">
-                {rootName ?? 'Markdown reader'}
+                Markdown reader
               </span>
             </div>
           </div>

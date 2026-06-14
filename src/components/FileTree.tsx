@@ -16,7 +16,7 @@ interface FileTreeProps {
 
 export function FileTree({ nodes, selectedPath, onSelect }: FileTreeProps) {
   return (
-    <div className="py-2">
+    <div className="select-none py-2">
       {nodes.map((node) => (
         <TreeNode
           key={node.path}
@@ -51,8 +51,8 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
         className={cn(
           'group flex w-full items-center gap-2 py-1 pr-2 text-sm transition-colors',
           selectedPath === node.path
-            ? 'bg-accent text-accent-foreground'
-            : 'text-foreground hover:bg-accent/60 hover:text-accent-foreground'
+            ? 'bg-primary/10 font-medium text-primary shadow-[inset_2px_0_0_hsl(var(--primary))]'
+            : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground'
         )}
         style={{ paddingLeft: `${filePad}px` }}
       >
@@ -60,8 +60,8 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
           className={cn(
             'h-4 w-4 shrink-0 transition-colors',
             selectedPath === node.path
-              ? 'text-accent-foreground'
-              : 'text-muted-foreground group-hover:text-accent-foreground'
+              ? 'text-primary'
+              : 'text-muted-foreground/70 group-hover:text-foreground'
           )}
         />
         <span className="truncate">{node.name}</span>
@@ -73,19 +73,19 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
-          className="group flex w-full items-center gap-1 py-1 pr-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground"
+          className="group flex w-full items-center gap-1.5 py-1 pr-2 text-sm font-medium text-foreground/90 transition-colors hover:bg-accent/60 hover:text-foreground"
           style={{ paddingLeft: `${folderPad}px` }}
         >
           <ChevronRight
             className={cn(
-              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:text-accent-foreground',
+              'h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground',
               open && 'rotate-90'
             )}
           />
           {open ? (
-            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent-foreground" />
+            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
           ) : (
-            <Folder className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent-foreground" />
+            <Folder className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
           )}
           <span className="truncate">{node.name}</span>
         </button>

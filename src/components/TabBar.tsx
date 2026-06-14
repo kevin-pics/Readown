@@ -8,13 +8,34 @@ interface TabBarProps {
   onClose: (path: string) => void
 }
 
+function computeLabels(tabs: string[]): Record<string, string> {
+  const counts = new Map<string, number>()
+  for (const path of tabs) {
+    const name = path.split(/[\\/]/).pop() ?? path
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+
+  const labels: Record<string, string> = {}
+  for (const path of tabs) {
+    const parts = path.split(/[\\/]/)
+    const name = parts[parts.length - 1] ?? path
+    labels[path] =
+      (counts.get(name) ?? 0) > 1 && parts.length >= 2
+        ? `${parts[parts.length - 2]}/${name}`
+        : name
+  }
+  return labels
+}
+
 export function TabBar({ tabs, activePath, onActivate, onClose }: TabBarProps) {
   if (tabs.length === 0) return null
+
+  const labels = computeLabels(tabs)
 
   return (
     <div className="flex h-9 shrink-0 items-stretch overflow-x-auto bg-muted/40">
       {tabs.map((path) => {
-        const name = path.split(/[\\/]/).pop() ?? path
+        const name = labels[path]
         const active = path === activePath
         return (
           <div
@@ -29,7 +50,7 @@ export function TabBar({ tabs, activePath, onActivate, onClose }: TabBarProps) {
             title={path}
           >
             <FileText className={cn('h-3.5 w-3.5 shrink-0', active && 'text-primary')} />
-            <span className="truncate">{name}</span>
+            <span className="truncate-start min-w-0">{name}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation()
