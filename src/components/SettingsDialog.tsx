@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fontOptions, type FontOption, type WidthOption, widthOptions, themes, type Theme } from '@/lib/theme'
+import { fontOptions, type FontOption, type ScaleOption, scaleOptions, type WidthOption, widthOptions, themes, type Theme } from '@/lib/theme'
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ interface SettingsDialogProps {
   onFontChange: (font: FontOption) => void
   currentWidth: WidthOption
   onWidthChange: (width: WidthOption) => void
+  currentScale: ScaleOption
+  onScaleChange: (scale: ScaleOption) => void
 }
 
 export function SettingsDialog({
@@ -30,6 +32,8 @@ export function SettingsDialog({
   onFontChange,
   currentWidth,
   onWidthChange,
+  currentScale,
+  onScaleChange,
 }: SettingsDialogProps) {
   const [previewThemeId, setPreviewThemeId] = useState(currentTheme.id)
 
@@ -82,6 +86,25 @@ export function SettingsDialog({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="mb-2 block text-sm font-medium">Markdown font size</label>
+          <select
+            tabIndex={-1}
+            value={currentScale.id}
+            onChange={(e) => {
+              const selected = scaleOptions.find((s) => s.id === e.target.value)
+              if (selected) onScaleChange(selected)
+            }}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-0"
+          >
+            {scaleOptions.map((scale) => (
+              <option key={scale.id} value={scale.id}>
+                {scale.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-5">

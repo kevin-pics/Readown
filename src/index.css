@@ -93,25 +93,30 @@
 
 .prose {
   color: var(--prose-text, hsl(var(--foreground)));
+  font-size: calc(1rem * var(--reader-scale, 1));
 }
 .prose h1 {
-  @apply mb-4 mt-2 text-3xl font-bold tracking-tight;
+  @apply mb-4 mt-2 font-bold tracking-tight;
+  font-size: 2em;
   color: var(--prose-heading, hsl(var(--foreground)));
   letter-spacing: -0.015em;
 }
 .prose h2 {
-  @apply mb-3 mt-8 text-2xl font-semibold tracking-tight;
+  @apply mb-3 mt-8 font-semibold tracking-tight;
+  font-size: 1.5em;
   color: var(--prose-heading, hsl(var(--foreground)));
   letter-spacing: -0.01em;
 }
 .prose h3 {
-  @apply mb-2 mt-6 text-xl font-semibold tracking-tight;
+  @apply mb-2 mt-6 font-semibold tracking-tight;
+  font-size: 1.25em;
   color: var(--prose-heading, hsl(var(--foreground)));
 }
 .prose h4,
 .prose h5,
 .prose h6 {
   @apply mb-2 mt-5 font-semibold;
+  font-size: 1em;
   color: var(--prose-heading, hsl(var(--foreground)));
 }
 .prose p {
@@ -127,7 +132,7 @@
   @apply mb-1;
 }
 .prose li > p {
-  @apply mb-1;
+  @apply mb-3;
 }
 .prose blockquote {
   @apply mb-4 border-l-4 pl-4 italic;
@@ -135,23 +140,27 @@
   color: var(--prose-blockquote, hsl(var(--muted-foreground)));
 }
 .prose code {
-  @apply rounded px-1 py-0.5 text-sm font-mono;
+  @apply rounded px-1 py-0.5 font-mono;
+  font-size: 0.875em;
   background-color: var(--prose-code-bg, hsl(var(--muted)));
 }
 .prose pre {
   @apply mb-4 rounded-lg border p-4 overflow-x-auto;
+  font-size: 0.875em;
   background-color: var(--prose-code-bg, hsl(var(--muted)));
   border-color: var(--prose-table-border, hsl(var(--border)));
 }
 .prose pre code {
-  @apply border-0 bg-transparent p-0 text-sm;
+  @apply border-0 bg-transparent p-0;
+  font-size: 1em;
 }
 .prose a {
   @apply font-medium hover:underline;
   color: var(--prose-link, hsl(var(--primary)));
 }
 .prose table {
-  @apply mb-4 w-full border-collapse overflow-hidden rounded-lg border text-sm;
+  @apply mb-4 w-full border-collapse overflow-hidden rounded-lg border;
+  font-size: 0.875em;
   border-color: var(--prose-table-border, hsl(var(--border)));
 }
 .prose th,

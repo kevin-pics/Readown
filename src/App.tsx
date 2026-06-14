@@ -7,7 +7,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
-import { applyFont, applyTheme, getStoredFont, getStoredTheme, getStoredWidth, storeFont, storeTheme, storeWidth, type FontOption, type Theme, type WidthOption } from '@/lib/theme'
+import { applyFont, applyScale, applyTheme, getStoredFont, getStoredTheme, getStoredWidth, scaleOptions, storeFont, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -195,6 +195,7 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
   const [font, setFont] = useState<FontOption>(() => getStoredFont())
   const [contentWidth, setContentWidth] = useState<WidthOption>(() => getStoredWidth())
+  const [scale, setScale] = useState<ScaleOption>(() => scaleOptions[1])
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openingDir, _setOpeningDir] = useState(false)
@@ -202,7 +203,8 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme)
     applyFont(font)
-  }, [theme, font])
+    applyScale(scale)
+  }, [theme, font, scale])
 
   const handleFontChange = useCallback((newFont: FontOption) => {
     setFont(newFont)
@@ -216,6 +218,11 @@ export default function App() {
   }, [])
 
 
+
+  const handleScaleChange = useCallback((newScale: ScaleOption) => {
+    setScale(newScale)
+    applyScale(newScale)
+  }, [])
 
   const setActivePathAndCheckModified = useCallback((path: string | null) => {
     setActivePath(path)
@@ -660,6 +667,8 @@ export default function App() {
         onFontChange={handleFontChange}
         currentWidth={contentWidth}
         onWidthChange={handleWidthChange}
+        currentScale={scale}
+        onScaleChange={handleScaleChange}
       />
 
       <Dialog open={!!pendingReload} onOpenChange={(open) => {

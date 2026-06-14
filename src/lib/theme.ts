@@ -339,6 +339,48 @@ export function applyFont(font: FontOption): void {
   document.documentElement.style.setProperty('--reader-font', font.value)
 }
 
+export interface ScaleOption {
+  id: string
+  name: string
+  value: number
+}
+
+export const scaleOptions: ScaleOption[] = [
+  { id: '0.8', name: '0.8x', value: 0.8 },
+  { id: '1', name: '1.0x', value: 1 },
+  { id: '1.1', name: '1.1x', value: 1.1 },
+  { id: '1.2', name: '1.2x', value: 1.2 },
+  { id: '1.5', name: '1.5x', value: 1.5 },
+  { id: '2', name: '2.0x', value: 2 },
+]
+
+const SCALE_STORAGE_KEY = 'readown.scale'
+
+export function getStoredScale(): ScaleOption {
+  try {
+    const id = localStorage.getItem(SCALE_STORAGE_KEY)
+    if (id) {
+      const found = scaleOptions.find((s) => s.id === id)
+      if (found) return found
+    }
+  } catch {
+    // ignore storage access errors
+  }
+  return scaleOptions[1]
+}
+
+export function storeScale(scale: ScaleOption): void {
+  try {
+    localStorage.setItem(SCALE_STORAGE_KEY, scale.id)
+  } catch {
+    // ignore storage access errors
+  }
+}
+
+export function applyScale(scale: ScaleOption): void {
+  document.documentElement.style.setProperty('--reader-scale', String(scale.value))
+}
+
 export interface WidthOption {
   id: string
   name: string
