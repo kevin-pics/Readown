@@ -38,8 +38,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
-  const [open, setOpen] = useState(true)
-  const hasChildren = node.children && node.children.length > 0
+  const [open, setOpen] = useState(false)
   const INDENT = 16
   const folderPad = depth * INDENT + 8
   const filePad = folderPad + 20
@@ -92,24 +91,15 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div>
-          {hasChildren ? (
-            node.children!.map((child: FileNode) => (
-              <TreeNode
-                key={child.path}
-                node={child}
-                selectedPath={selectedPath}
-                onSelect={onSelect}
-                depth={depth + 1}
-              />
-            ))
-          ) : (
-            <span
-              className="block py-1 text-xs text-muted-foreground"
-              style={{ paddingLeft: `${(depth + 1) * INDENT + 28}px` }}
-            >
-              Empty folder
-            </span>
-          )}
+          {node.children!.map((child: FileNode) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              selectedPath={selectedPath}
+              onSelect={onSelect}
+              depth={depth + 1}
+            />
+          ))}
         </div>
       </CollapsibleContent>
     </Collapsible>

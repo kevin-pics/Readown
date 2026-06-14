@@ -6,20 +6,24 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SettingsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   currentTheme: Theme
   onThemeChange: (theme: Theme) => void
 }
 
-export function SettingsDialog({ currentTheme, onThemeChange }: SettingsDialogProps) {
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  currentTheme,
+  onThemeChange,
+}: SettingsDialogProps) {
   const [previewThemeId, setPreviewThemeId] = useState(currentTheme.id)
-  const [open, setOpen] = useState(false)
 
   const handleSelect = (theme: Theme) => {
     setPreviewThemeId(theme.id)
@@ -27,12 +31,7 @@ export function SettingsDialog({ currentTheme, onThemeChange }: SettingsDialogPr
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Settings">
-          <Settings className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Appearance</DialogTitle>
@@ -68,7 +67,7 @@ export function SettingsDialog({ currentTheme, onThemeChange }: SettingsDialogPr
           ))}
         </div>
         <div className="mt-4 flex justify-end">
-          <Button size="sm" onClick={() => setOpen(false)}>Done</Button>
+          <Button size="sm" onClick={() => onOpenChange(false)}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>

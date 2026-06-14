@@ -14,7 +14,15 @@ export interface ReadownAPI {
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
   onCloseTab: (callback: () => void) => () => void
+  onOpenDirectory: (callback: () => void) => () => void
+  onOpenSettings: (callback: () => void) => () => void
   closeWindow: () => void
+}
+
+function onChannel(channel: string, callback: () => void) {
+  const handler = () => callback()
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
 }
 
 const api: ReadownAPI = {
@@ -26,11 +34,9 @@ const api: ReadownAPI = {
     ipcRenderer.on('drag-drop-directory', handler)
     return () => ipcRenderer.removeListener('drag-drop-directory', handler)
   },
-  onCloseTab: (callback: () => void) => {
-    const handler = () => callback()
-    ipcRenderer.on('close-current-tab', handler)
-    return () => ipcRenderer.removeListener('close-current-tab', handler)
-  },
+  onCloseTab: (callback: () => void) => onChannel('close-current-tab', callback),
+  onOpenDirectory: (callback: () => void) => onChannel('menu-open-directory', callback),
+  onOpenSettings: (callback: () => void) => onChannel('menu-open-settings', callback),
   closeWindow: () => ipcRenderer.send('close-window'),
 }
 

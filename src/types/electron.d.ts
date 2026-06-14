@@ -12,6 +12,8 @@ export interface ReadownAPI {
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
   onCloseTab: (callback: () => void) => () => void
+  onOpenDirectory: (callback: () => void) => () => void
+  onOpenSettings: (callback: () => void) => () => void
   closeWindow: () => void
 }
 

@@ -4,11 +4,11 @@ import { FileTree } from '@/components/FileTree'
 import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyTheme, getStoredTheme, storeTheme, type Theme } from '@/lib/theme'
+import { Button } from '@/components/ui/button'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
@@ -35,46 +35,104 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
 function createBrowserAPI(): DirectoryAPI {
   const fileHandles = new Map<string, FileSystemFileHandle>()
   const EXCLUDED = new Set(['.git', 'node_modules', '.DS_Store'])
+  const MAX_FILES = 500
 
-  async function scanHandle(
-    handle: FileSystemDirectoryHandle,
-    basePath: string = ''
-  ): Promise<FileNode[]> {
-    const nodes: FileNode[] = []
-    const entries: FileSystemHandle[] = []
-    for await (const entry of handle.values()) {
-      entries.push(entry)
+  async function scanHandle(handle: FileSystemDirectoryHandle): Promise<FileNode[]> {
+    const rootNodes: FileNode[] = []
+    let visitedFiles = 0
+
+    interface DirWithHandle {
+      handle: FileSystemDirectoryHandle
+      basePath: string
+      targetNodes: FileNode[]
     }
 
-    for (const entry of entries) {
-      if (EXCLUDED.has(entry.name)) continue
+    const processDir = async (item: DirWithHandle) => {
+      const entries: FileSystemHandle[] = []
+      for await (const entry of item.handle.values()) {
+        entries.push(entry)
+      }
 
-      const rel = basePath ? `${basePath}/${entry.name}` : entry.name
+      const childDirs: FileSystemDirectoryHandle[] = []
 
-      if (entry.kind === 'directory') {
-        const children = await scanHandle(entry as FileSystemDirectoryHandle, rel)
-        nodes.push({
-          name: entry.name,
-          path: rel,
-          relativePath: rel,
-          type: 'directory',
-          children,
-        })
-      } else if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
-        fileHandles.set(rel, entry as FileSystemFileHandle)
-        nodes.push({
-          name: entry.name,
-          path: rel,
-          relativePath: rel,
-          type: 'file',
-        })
+      for (const entry of entries) {
+        if (EXCLUDED.has(entry.name)) continue
+        const rel = item.basePath ? `${item.basePath}/${entry.name}` : entry.name
+
+        if (entry.kind === 'directory') {
+          childDirs.push(entry as FileSystemDirectoryHandle)
+        } else if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
+          if (visitedFiles < MAX_FILES) {
+            visitedFiles++
+            fileHandles.set(rel, entry as FileSystemFileHandle)
+            item.targetNodes.push({
+              name: entry.name,
+              path: rel,
+              relativePath: rel,
+              type: 'file',
+            })
+          }
+        }
+      }
+
+      return childDirs
+    }
+
+    const queue: DirWithHandle[] = [{ handle, basePath: '', targetNodes: rootNodes }]
+    while (queue.length > 0) {
+      const batch = queue.splice(0, queue.length)
+      const nextChildren = await Promise.all(batch.map(processDir))
+      for (let i = 0; i < batch.length; i++) {
+        const { basePath, targetNodes } = batch[i]
+        for (const childHandle of nextChildren[i]) {
+          const rel = basePath ? `${basePath}/${childHandle.name}` : childHandle.name
+          const children: FileNode[] = []
+          const dirNode: FileNode & { children: FileNode[] } = {
+            name: childHandle.name,
+            path: rel,
+            relativePath: rel,
+            type: 'directory',
+            children,
+          }
+          targetNodes.push(dirNode)
+          queue.push({ handle: childHandle, basePath: rel, targetNodes: children })
+        }
       }
     }
 
-    return nodes.sort((a, b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name)
-      return a.type === 'directory' ? -1 : 1
-    })
+    const pruneEmpty = (nodes: FileNode[]): FileNode[] => {
+      const kept: FileNode[] = []
+      for (const node of nodes) {
+        if (node.type === 'file') {
+          kept.push(node)
+          continue
+        }
+        node.children = pruneEmpty(node.children || [])
+        if (node.children.length > 0) {
+          kept.push(node)
+        }
+      }
+      return kept
+    }
+
+    const pruned = pruneEmpty(rootNodes)
+    if (pruned.length === 0) {
+      return []
+    }
+    rootNodes.splice(0, rootNodes.length, ...pruned)
+
+    const sortNodes = (nodes: FileNode[]) => {
+      nodes.sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name)
+        return a.type === 'directory' ? -1 : 1
+      })
+      for (const node of nodes) {
+        if (node.children) sortNodes(node.children)
+      }
+    }
+    sortNodes(rootNodes)
+
+    return rootNodes
   }
 
   return {
@@ -88,7 +146,11 @@ function createBrowserAPI(): DirectoryAPI {
         const handle = await window.showDirectoryPicker()
         return await scanHandle(handle)
       } catch (err) {
-        if ((err as Error).name === 'AbortError') return null
+        const name = (err as Error).name
+        if (name === 'AbortError') return null
+        if (name === 'InvalidStateError' || (err as Error).message?.includes('File picker already active')) {
+          return null
+        }
         throw err
       }
     },
@@ -122,6 +184,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
   const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [openingDir, _setOpeningDir] = useState(false)
 
   useEffect(() => {
     applyTheme(theme)
@@ -180,6 +244,32 @@ export default function App() {
     closeActiveTabRef.current = closeActiveTab
   }, [closeActiveTab])
 
+  const openingDirRef = useRef(false)
+  const setOpeningDir = (v: boolean) => {
+    openingDirRef.current = v
+    _setOpeningDir(v)
+  }
+
+  const handleOpen = useCallback(async () => {
+    if (openingDirRef.current) return
+    setOpeningDir(true)
+    setError(null)
+    try {
+      const nodes = await api.openDirectory()
+      if (!nodes) return
+      setTree(nodes)
+      setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
+      setTabs([])
+      setActivePath(null)
+      setContents({})
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setOpeningDir(false)
+    }
+  }, [api])
+
   useEffect(() => {
     const electron = window.readownAPI
     if (!electron?.onCloseTab) return
@@ -194,6 +284,16 @@ export default function App() {
         closeActiveTabRef.current()
         return
       }
+      if (e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        void handleOpen()
+        return
+      }
+      if (e.key === ',') {
+        e.preventDefault()
+        setSettingsOpen(true)
+        return
+      }
       if (e.key < '1' || e.key > '9' || tabs.length === 0) return
       e.preventDefault()
       const n = Number(e.key)
@@ -202,7 +302,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs])
+  }, [tabs, handleOpen])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -257,26 +357,23 @@ export default function App() {
     return () => unsubscribe()
   }, [api, loadDirectory])
 
-  const handleOpen = async () => {
-    try {
-      const nodes = await api.openDirectory()
-      if (!nodes) return
-      setTree(nodes)
-      setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
-      setTabs([])
-      setActivePath(null)
-      setContents({})
-      setError(null)
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
-
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
     applyTheme(newTheme)
     storeTheme(newTheme)
   }
+
+  useEffect(() => {
+    const electron = window.readownAPI
+    if (!electron) return
+    const unsubs = [
+      electron.onOpenDirectory?.(() => {
+        void handleOpen()
+      }),
+      electron.onOpenSettings?.(() => setSettingsOpen(true)),
+    ]
+    return () => unsubs.forEach((unsub) => unsub?.())
+  }, [handleOpen])
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -343,12 +440,9 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center">
-            <Button variant="ghost" size="icon" onClick={handleOpen} title="Open directory" className="shrink-0">
+            <Button variant="ghost" size="icon" onClick={handleOpen} disabled={openingDir} title="Open directory" className="shrink-0">
               <FolderOpen className="h-4 w-4" />
             </Button>
-            <div className="shrink-0">
-              <SettingsDialog currentTheme={theme} onThemeChange={handleThemeChange} />
-            </div>
           </div>
         </div>
 
@@ -370,7 +464,7 @@ export default function App() {
                   <FolderOpen className="h-8 w-8 text-muted-foreground" />
                 )}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <p className="text-sm font-medium">
                   {rootName ? 'No Markdown files found' : 'No directory open'}
                 </p>
@@ -379,6 +473,12 @@ export default function App() {
                     ? `No .md files were found in ${rootName}.`
                     : 'Drop a directory here, or use the folder icon above to open one.'}
                 </p>
+                {rootName && (
+                  <Button size="sm" variant="secondary" onClick={handleOpen} disabled={openingDir}>
+                    <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                    Open another directory
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -413,6 +513,13 @@ export default function App() {
           />
         </div>
       </main>
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        currentTheme={theme}
+        onThemeChange={handleThemeChange}
+      />
     </div>
   )
 }

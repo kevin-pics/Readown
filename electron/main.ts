@@ -48,16 +48,56 @@ function createWindow(): BrowserWindow {
 
 function setupMenu(): void {
   const isMac = process.platform === 'darwin'
-  const sendCloseTab = () => {
+  const send = (channel: string) => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-    win?.webContents.send('close-current-tab')
+    win?.webContents.send(channel)
+  }
+
+  const settingsItem: MenuItemConstructorOptions = {
+    label: 'Settings…',
+    accelerator: 'CmdOrCtrl+,',
+    click: () => send('menu-open-settings'),
   }
 
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              settingsItem,
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const },
+            ],
+          } as MenuItemConstructorOptions,
+        ]
+      : []),
     {
       label: 'File',
-      submenu: [{ label: 'Close Tab', click: sendCloseTab }],
+      submenu: [
+        {
+          label: 'Open Directory…',
+          click: () => send('menu-open-directory'),
+        },
+        { type: 'separator' },
+        { label: 'Close Tab', click: () => send('close-current-tab') },
+        ...(isMac
+          ? []
+          : [
+              { type: 'separator' as const },
+              settingsItem,
+              { type: 'separator' as const },
+              { role: 'quit' as const },
+            ]),
+      ],
     },
     { role: 'editMenu' },
     { role: 'viewMenu' },
@@ -103,40 +143,106 @@ interface TreeNode {
 }
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store'])
+const MAX_FILES = 500
+
+interface DirQueueItem {
+  dirPath: string
+  parentNode?: TreeNode & { children: TreeNode[] }
+}
 
 async function scanDirectory(dirPath: string, basePath: string): Promise<TreeNode[]> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  const nodes: TreeNode[] = []
+  const rootNodes: TreeNode[] = []
+  let visitedFiles = 0
 
-  for (const entry of entries) {
-    if (EXCLUDED_DIRS.has(entry.name)) continue
+  const processEntries = async (currentDir: string, targetNodes: TreeNode[]) => {
+    const entries = await readdir(currentDir, { withFileTypes: true })
+    const childDirs: { entry: typeof entries[number]; rel: string }[] = []
 
-    const fullPath = join(dirPath, entry.name)
-    const rel = relative(basePath, fullPath)
+    for (const entry of entries) {
+      if (EXCLUDED_DIRS.has(entry.name)) continue
 
-    if (entry.isDirectory()) {
-      const children = await scanDirectory(fullPath, basePath)
-      nodes.push({
+      const fullPath = join(currentDir, entry.name)
+      const rel = relative(basePath, fullPath)
+
+      if (entry.isDirectory()) {
+        childDirs.push({ entry, rel })
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+        if (visitedFiles < MAX_FILES) {
+          visitedFiles++
+          targetNodes.push({
+            name: entry.name,
+            path: fullPath,
+            relativePath: rel,
+            type: 'file',
+          })
+        }
+      }
+    }
+
+    const dirNodes: (TreeNode & { children: TreeNode[] })[] = []
+    for (const { entry, rel } of childDirs) {
+      const dirNode: TreeNode & { children: TreeNode[] } = {
         name: entry.name,
-        path: fullPath,
+        path: join(currentDir, entry.name),
         relativePath: rel,
         type: 'directory',
-        children,
-      })
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
-      nodes.push({
-        name: entry.name,
-        path: fullPath,
-        relativePath: rel,
-        type: 'file',
-      })
+        children: [],
+      }
+      targetNodes.push(dirNode)
+      dirNodes.push(dirNode)
     }
+
+    return dirNodes
   }
 
-  return nodes.sort((a, b) => {
-    if (a.type === b.type) return a.name.localeCompare(b.name)
-    return a.type === 'directory' ? -1 : 1
-  })
+  const firstLevel = await processEntries(dirPath, rootNodes)
+  const queue: DirQueueItem[] = firstLevel.map((node) => ({ dirPath: node.path, parentNode: node }))
+
+  while (queue.length > 0) {
+    const batch = queue.splice(0, queue.length)
+    await Promise.all(
+      batch.map(async (item) => {
+        const children = await processEntries(item.dirPath, item.parentNode!.children)
+        for (const child of children) {
+          queue.push({ dirPath: child.path, parentNode: child })
+        }
+      })
+    )
+  }
+
+  const pruneEmpty = (nodes: TreeNode[]): TreeNode[] => {
+    const kept: TreeNode[] = []
+    for (const node of nodes) {
+      if (node.type === 'file') {
+        kept.push(node)
+        continue
+      }
+      node.children = pruneEmpty(node.children || [])
+      if (node.children.length > 0) {
+        kept.push(node)
+      }
+    }
+    return kept
+  }
+
+  const pruned = pruneEmpty(rootNodes)
+  if (pruned.length === 0) {
+    return []
+  }
+  rootNodes.splice(0, rootNodes.length, ...pruned)
+
+  const sortNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name)
+      return a.type === 'directory' ? -1 : 1
+    })
+    for (const node of nodes) {
+      if (node.children) sortNodes(node.children)
+    }
+  }
+  sortNodes(rootNodes)
+
+  return rootNodes
 }
 
 ipcMain.on('close-window', (event) => {
