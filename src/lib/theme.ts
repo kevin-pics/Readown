@@ -338,3 +338,40 @@ export function storeFont(font: FontOption): void {
 export function applyFont(font: FontOption): void {
   document.documentElement.style.setProperty('--reader-font', font.value)
 }
+
+export interface WidthOption {
+  id: string
+  name: string
+  value: string
+}
+
+export const widthOptions: WidthOption[] = [
+  { id: '800', name: '800px', value: '800px' },
+  { id: '1000', name: '1000px', value: '1000px' },
+  { id: '1200', name: '1200px', value: '1200px' },
+  { id: '1400', name: '1400px', value: '1400px' },
+  { id: 'full', name: 'Full width', value: '100%' },
+]
+
+const WIDTH_STORAGE_KEY = 'readown.width'
+
+export function getStoredWidth(): WidthOption {
+  try {
+    const id = localStorage.getItem(WIDTH_STORAGE_KEY)
+    if (id) {
+      const found = widthOptions.find((w) => w.id === id)
+      if (found) return found
+    }
+  } catch {
+    // ignore storage access errors
+  }
+  return widthOptions[1]
+}
+
+export function storeWidth(width: WidthOption): void {
+  try {
+    localStorage.setItem(WIDTH_STORAGE_KEY, width.id)
+  } catch {
+    // ignore storage access errors
+  }
+}

@@ -4,11 +4,12 @@ import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { BookOpen, FileText } from 'lucide-react'
-import { isExternalHref } from '@/lib/utils'
+import { cn, isExternalHref } from '@/lib/utils'
 
 interface MarkdownPreviewProps {
   content: string
   filePath: string | null
+  contentWidth: string
   onOpenRelative: (href: string) => void
 }
 
@@ -35,7 +36,7 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-export function MarkdownPreview({ content, filePath, onOpenRelative }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
@@ -108,7 +109,7 @@ export function MarkdownPreview({ content, filePath, onOpenRelative }: MarkdownP
 
   return (
     <ScrollArea ref={scrollRef} className="h-full">
-      <article className="prose max-w-none px-8 py-8">
+      <article className={cn('prose px-8 py-8', contentWidth === '100%' && 'max-w-none')} style={{ maxWidth: contentWidth !== '100%' ? contentWidth : undefined }}>
         <div className="mb-6 flex items-center gap-2 border-b pb-4 text-xs text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{filePath}</span>

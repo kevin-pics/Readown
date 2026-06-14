@@ -7,7 +7,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
-import { applyFont, applyTheme, getStoredFont, getStoredTheme, storeFont, storeTheme, type FontOption, type Theme } from '@/lib/theme'
+import { applyFont, applyTheme, getStoredFont, getStoredTheme, getStoredWidth, storeFont, storeTheme, storeWidth, type FontOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
 interface DirectoryAPI {
@@ -184,6 +184,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
   const [font, setFont] = useState<FontOption>(() => getStoredFont())
+  const [contentWidth, setContentWidth] = useState<WidthOption>(() => getStoredWidth())
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openingDir, _setOpeningDir] = useState(false)
@@ -197,6 +198,11 @@ export default function App() {
     setFont(newFont)
     applyFont(newFont)
     storeFont(newFont)
+  }, [])
+
+  const handleWidthChange = useCallback((newWidth: WidthOption) => {
+    setContentWidth(newWidth)
+    storeWidth(newWidth)
   }, [])
 
   useEffect(() => {
@@ -541,6 +547,7 @@ export default function App() {
           <MarkdownPreview
             content={activePath ? contents[activePath] ?? '' : ''}
             filePath={activePath}
+            contentWidth={contentWidth.value}
             onOpenRelative={handleOpenRelative}
           />
         </div>
@@ -553,6 +560,8 @@ export default function App() {
         onThemeChange={handleThemeChange}
         currentFont={font}
         onFontChange={handleFontChange}
+        currentWidth={contentWidth}
+        onWidthChange={handleWidthChange}
       />
     </div>
   )

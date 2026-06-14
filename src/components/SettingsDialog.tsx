@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fontOptions, type FontOption, themes, type Theme } from '@/lib/theme'
+import { fontOptions, type FontOption, type WidthOption, widthOptions, themes, type Theme } from '@/lib/theme'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ interface SettingsDialogProps {
   onThemeChange: (theme: Theme) => void
   currentFont: FontOption
   onFontChange: (font: FontOption) => void
+  currentWidth: WidthOption
+  onWidthChange: (width: WidthOption) => void
 }
 
 export function SettingsDialog({
@@ -26,6 +28,8 @@ export function SettingsDialog({
   onThemeChange,
   currentFont,
   onFontChange,
+  currentWidth,
+  onWidthChange,
 }: SettingsDialogProps) {
   const [previewThemeId, setPreviewThemeId] = useState(currentTheme.id)
 
@@ -78,6 +82,25 @@ export function SettingsDialog({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="mb-2 block text-sm font-medium">Content width</label>
+          <select
+            tabIndex={-1}
+            value={currentWidth.id}
+            onChange={(e) => {
+              const selected = widthOptions.find((w) => w.id === e.target.value)
+              if (selected) onWidthChange(selected)
+            }}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-0"
+          >
+            {widthOptions.map((width) => (
+              <option key={width.id} value={width.id}>
+                {width.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-5">
