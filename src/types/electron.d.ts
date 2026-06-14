@@ -15,6 +15,8 @@ export interface ReadownAPI {
   onOpenDirectory: (callback: () => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
   closeWindow: () => void
+  isDirectory: (filePath: string) => Promise<boolean>
+  getPathForFile: (file: File) => string
 }
 
 declare global {

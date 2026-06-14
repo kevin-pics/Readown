@@ -286,11 +286,6 @@ export const fontOptions: FontOption[] = [
     value: "'SF Pro Rounded', -apple-system, BlinkMacSystemFont, sans-serif",
   },
   {
-    id: 'san-francisco',
-    name: 'San Francisco',
-    value: "-apple-system, BlinkMacSystemFont, 'San Francisco', 'SF Pro Text', sans-serif",
-  },
-  {
     id: 'pingfang-sc',
     name: 'PingFang SC',
     value: "'PingFang SC', 'Helvetica Neue', Arial, sans-serif",

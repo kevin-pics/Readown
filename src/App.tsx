@@ -5,7 +5,7 @@ import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn, hashString, resolveRelativePath } from '@/lib/utils'
+import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
@@ -471,7 +471,7 @@ export default function App() {
   }, [sidebarWidth])
 
   const loadDirectory = useCallback(
-    async (source: string | FileSystemDirectoryHandle) => {
+    async (source: string | FileSystemDirectoryHandle, selectPath?: string) => {
       setError(null)
       try {
         const nodes = await api.loadDirectory(source)
@@ -486,11 +486,14 @@ export default function App() {
         setTabs([])
         setActivePath(null)
         setContents({})
+        if (selectPath) {
+          openFile(selectPath)
+        }
       } catch (err) {
         setError((err as Error).message)
       }
     },
-    [api]
+    [api, openFile]
   )
 
   useEffect(() => {
@@ -537,6 +540,30 @@ export default function App() {
     const item = e.dataTransfer.items[0]
     if (!item) return
 
+    if (window.readownAPI) {
+      const files = e.dataTransfer.files
+      const file = files.length > 0 ? files[0] : item.getAsFile?.()
+      if (!file) {
+        setError('Please drop a directory or Markdown file.')
+        return
+      }
+      const droppedPath = window.readownAPI.getPathForFile(file)
+      const isDir = await window.readownAPI.isDirectory(droppedPath)
+      if (isDir) {
+        await loadDirectory(droppedPath)
+        return
+      }
+      if (droppedPath.toLowerCase().endsWith('.md')) {
+        const dirPath = droppedPath.substring(0, droppedPath.lastIndexOf('/')) || droppedPath.substring(0, droppedPath.lastIndexOf('\\'))
+        if (dirPath) {
+          await loadDirectory(dirPath, droppedPath)
+          return
+        }
+      }
+      setError('Please drop a directory or Markdown file.')
+      return
+    }
+
     try {
       const handle = await item.getAsFileSystemHandle?.()
       if (handle && handle.kind === 'directory') {
@@ -558,14 +585,19 @@ export default function App() {
 
   return (
     <div
-      className={cn(
-        'flex h-full w-full overflow-hidden bg-background text-foreground',
-        isDragging && 'ring-2 ring-primary ring-inset'
-      )}
+      className="relative flex h-full w-full overflow-hidden bg-background text-foreground"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-primary/10 backdrop-blur-sm">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-background shadow-lg">
+            <Folder className="h-8 w-8 text-primary" />
+          </div>
+          <p className="mt-4 text-lg font-medium text-primary">Drop a directory here to start.</p>
+        </div>
+      )}
       <aside
         className="flex shrink-0 flex-col border-r bg-card"
         style={{ width: `${sidebarWidth}px`, minWidth: '260px' }}
@@ -614,7 +646,7 @@ export default function App() {
                 <p className="max-w-[220px] text-xs text-muted-foreground">
                   {rootName
                     ? `No .md files were found in ${rootName}.`
-                    : 'Drop a directory here, or use the folder icon above to open one.'}
+                    : 'Drop a directory here to start.'}
                 </p>
                 {rootName && (
                   <Button size="sm" variant="secondary" onClick={handleOpen} disabled={openingDir}>
@@ -638,15 +670,6 @@ export default function App() {
       </div>
 
       <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
-        {isDragging && (
-          <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-primary/10">
-            <div className="rounded-xl border-2 border-dashed border-primary bg-background/80 px-10 py-8 text-center shadow-lg backdrop-blur">
-              <Folder className="mx-auto mb-3 h-10 w-10 text-primary" />
-              <p className="text-lg font-medium text-primary">Drop directory here</p>
-              <p className="text-sm text-muted-foreground">to load Markdown files</p>
-            </div>
-          </div>
-        )}
         <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
         <div className="flex-1 overflow-hidden">
           <MarkdownPreview

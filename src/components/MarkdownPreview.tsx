@@ -103,7 +103,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
         </div>
         <p className="text-lg font-medium">No file selected</p>
         <p className="mt-1 max-w-sm text-sm">
-          Open or drop a directory to start reading Markdown files.
+          Drop a directory here to start.
         </p>
       </div>
     )

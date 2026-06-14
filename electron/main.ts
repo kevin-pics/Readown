@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
-import { readFile, readdir } from 'fs/promises'
+import { readFile, readdir, stat } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { dirname, join, relative } from 'path'
 
@@ -26,15 +26,21 @@ function createWindow(): BrowserWindow {
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
-    win.webContents.openDevTools({ mode: 'detach' })
   } else {
     win.loadFile(join(__dirname, '../../dist/index.html'))
       .catch((err) => {
         console.error('Failed to load index.html:', err)
         dialog.showErrorBox('Load Error', `Failed to load app: ${err.message}`)
       })
-    win.webContents.openDevTools({ mode: 'detach' })
   }
+
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.meta && input.key.toLowerCase() === 'n') {
+      event.preventDefault()
+      createWindow()
+      return
+    }
+  })
 
   win.webContents.on('will-navigate', (e, url) => {
     if (url !== win.webContents.getURL()) {
@@ -84,6 +90,11 @@ function setupMenu(): void {
       label: 'File',
       submenu: [
         {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => createWindow(),
+        },
+        {
           label: 'Open Directory…',
           click: () => send('menu-open-directory'),
         },
@@ -100,7 +111,20 @@ function setupMenu(): void {
       ],
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload', accelerator: '', visible: false },
+        { role: 'forceReload', accelerator: '', visible: false },
+        { role: 'toggleDevTools', accelerator: 'Alt+CmdOrCtrl+I' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
     {
       label: 'Window',
       submenu: [
@@ -125,8 +149,11 @@ app.whenReady().then(() => {
   })
 
   app.on('open-file', (_event, path) => {
-    const win = BrowserWindow.getFocusedWindow()
-    if (win && path) win.webContents.send('drag-drop-directory', path)
+    const wins = BrowserWindow.getAllWindows()
+    const win = BrowserWindow.getFocusedWindow() ?? wins[0]
+    if (win && path) {
+      win.webContents.send('drag-drop-directory', path)
+    }
   })
 })
 
@@ -270,5 +297,17 @@ ipcMain.handle(
   'read-file',
   async (_event: IpcMainInvokeEvent, filePath: string): Promise<string> => {
     return readFile(filePath, 'utf-8')
+  }
+)
+
+ipcMain.handle(
+  'is-directory',
+  async (_event: IpcMainInvokeEvent, filePath: string): Promise<boolean> => {
+    try {
+      const info = await stat(filePath)
+      return info.isDirectory()
+    } catch {
+      return false
+    }
   }
 )

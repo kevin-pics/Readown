@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 export interface FileNode {
   name: string
@@ -17,6 +17,8 @@ export interface ReadownAPI {
   onOpenDirectory: (callback: () => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
   closeWindow: () => void
+  isDirectory: (filePath: string) => Promise<boolean>
+  getPathForFile: (file: File) => string
 }
 
 function onChannel(channel: string, callback: () => void) {
@@ -38,6 +40,8 @@ const api: ReadownAPI = {
   onOpenDirectory: (callback: () => void) => onChannel('menu-open-directory', callback),
   onOpenSettings: (callback: () => void) => onChannel('menu-open-settings', callback),
   closeWindow: () => ipcRenderer.send('close-window'),
+  isDirectory: (filePath: string) => ipcRenderer.invoke('is-directory', filePath),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }
 
 contextBridge.exposeInMainWorld('readownAPI', api)
