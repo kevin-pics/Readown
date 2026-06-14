@@ -177,6 +177,18 @@ function createBrowserAPI(): DirectoryAPI {
   }
 }
 
+function collectFilePaths(nodes: FileNode[]): string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      paths.push(node.path)
+    } else if (node.children) {
+      paths.push(...collectFilePaths(node.children))
+    }
+  }
+  return paths
+}
+
 export default function App() {
   const [api] = useState<DirectoryAPI>(() => {
     if (window.readownAPI) return adaptElectronAPI(window.readownAPI)
@@ -393,12 +405,17 @@ export default function App() {
       setActivePath(null)
       setContents({})
       setError(null)
+
+      const filePaths = collectFilePaths(nodes)
+      if (filePaths.length === 1) {
+        openFile(filePaths[0])
+      }
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setOpeningDir(false)
     }
-  }, [api])
+  }, [api, openFile])
 
   useEffect(() => {
     const electron = window.readownAPI
@@ -501,6 +518,11 @@ export default function App() {
         setContents({})
         if (selectPath) {
           openFile(selectPath)
+        } else {
+          const filePaths = collectFilePaths(nodes)
+          if (filePaths.length === 1) {
+            openFile(filePaths[0])
+          }
         }
       } catch (err) {
         setError((err as Error).message)
@@ -534,21 +556,34 @@ export default function App() {
     return () => unsubs.forEach((unsub) => unsub?.())
   }, [handleOpen])
 
+  const dragCountRef = useRef(0)
+
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (dragCountRef.current === 0) setIsDragging(true)
+    dragCountRef.current++
+  }
+
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(true)
   }
 
   const onDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(false)
+    dragCountRef.current--
+    if (dragCountRef.current <= 0) {
+      dragCountRef.current = 0
+      setIsDragging(false)
+    }
   }
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    dragCountRef.current = 0
     setIsDragging(false)
     const item = e.dataTransfer.items[0]
     if (!item) return
@@ -599,6 +634,7 @@ export default function App() {
   return (
     <div
       className="relative flex h-full w-full overflow-hidden bg-background text-foreground"
+      onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

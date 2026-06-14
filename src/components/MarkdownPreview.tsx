@@ -3,7 +3,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { BookOpen, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { cn, isExternalHref } from '@/lib/utils'
 
 interface MarkdownPreviewProps {
@@ -96,13 +96,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   }
 
   if (!filePath) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center px-6 text-center text-muted-foreground">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-          <BookOpen className="h-8 w-8" />
-        </div>
-      </div>
-    )
+    return null
   }
 
   return (
