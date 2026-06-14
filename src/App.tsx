@@ -5,10 +5,17 @@ import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn, resolveRelativePath } from '@/lib/utils'
+import { cn, hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyFont, applyTheme, getStoredFont, getStoredTheme, getStoredWidth, storeFont, storeTheme, storeWidth, type FontOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
@@ -179,6 +186,9 @@ export default function App() {
   const [tabs, setTabs] = useState<string[]>([])
   const [activePath, setActivePath] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
+  const [snapshots, setSnapshots] = useState<Record<string, string>>({})
+  const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
+  const [pendingReload, setPendingReload] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -205,27 +215,20 @@ export default function App() {
     storeWidth(newWidth)
   }, [])
 
-  useEffect(() => {
-    if (!activePath || contents[activePath] !== undefined) return
-    let cancelled = false
-    api
-      .readFile(activePath)
-      .then((text) => {
-        if (!cancelled) setContents((prev) => ({ ...prev, [activePath]: text }))
-      })
-      .catch((err) => {
-        if (!cancelled) setError((err as Error).message)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activePath, contents, api])
 
-  const openFile = useCallback((path: string) => {
-    setError(null)
-    setActivePath(path)
-    setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
-  }, [])
+
+  const openFile = useCallback(
+    (path: string) => {
+      setError(null)
+      setActivePath(path)
+      setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
+
+      if (modifiedTabs.has(path)) {
+        setPendingReload(path)
+      }
+    },
+    [modifiedTabs]
+  )
 
   const closeTab = useCallback(
     (path: string) => {
@@ -239,12 +242,93 @@ export default function App() {
         }
         return rest
       })
+      setSnapshots((prev) => {
+        const rest: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          if (key !== path) rest[key] = prev[key]
+        }
+        return rest
+      })
+      setModifiedTabs((prev) => {
+        const nextSet = new Set(prev)
+        nextSet.delete(path)
+        return nextSet
+      })
       if (activePath === path) {
         setActivePath(next.length ? next[Math.min(idx, next.length - 1)] : null)
       }
     },
     [tabs, activePath]
   )
+
+  const reloadTab = useCallback(
+    (path: string) => {
+      setError(null)
+      let cancelled = false
+      api
+        .readFile(path)
+        .then((text) => {
+          if (cancelled) return
+          setContents((prev) => ({ ...prev, [path]: text }))
+          setSnapshots((prev) => ({ ...prev, [path]: hashString(text) }))
+          setModifiedTabs((prev) => {
+            const next = new Set(prev)
+            next.delete(path)
+            return next
+          })
+        })
+        .catch((err) => {
+          if (!cancelled) setError((err as Error).message)
+        })
+      return () => {
+        cancelled = true
+      }
+    },
+    [api]
+  )
+
+  useEffect(() => {
+    if (!activePath || contents[activePath] !== undefined) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const text = await api.readFile(activePath)
+        if (cancelled) return
+        setContents((prev) => ({ ...prev, [activePath]: text }))
+        setSnapshots((prev) => ({ ...prev, [activePath]: hashString(text) }))
+        setModifiedTabs((prev) => {
+          const next = new Set(prev)
+          next.delete(activePath)
+          return next
+        })
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activePath, contents, api])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      for (const path of tabs) {
+        api
+          .readFile(path)
+          .then((text) => {
+            const latest = hashString(text)
+            const saved = snapshots[path]
+            if (saved !== undefined && saved !== latest) {
+              setModifiedTabs((prev) => new Set(prev).add(path))
+            }
+          })
+          .catch(() => {
+            // ignore polling errors
+          })
+      }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [tabs, snapshots, api])
 
   const handleOpenRelative = useCallback(
     (href: string) => {
@@ -542,7 +626,7 @@ export default function App() {
             </div>
           </div>
         )}
-        <TabBar tabs={tabs} activePath={activePath} onActivate={setActivePath} onClose={closeTab} />
+        <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePath} onClose={closeTab} />
         <div className="flex-1 overflow-hidden">
           <MarkdownPreview
             content={activePath ? contents[activePath] ?? '' : ''}
@@ -563,6 +647,30 @@ export default function App() {
         currentWidth={contentWidth}
         onWidthChange={handleWidthChange}
       />
+
+      <Dialog open={!!pendingReload} onOpenChange={(open) => {
+        if (!open) setPendingReload(null)
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>File changed</DialogTitle>
+            <DialogDescription>
+              The file for this tab has changed on disk. Reload the latest content?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPendingReload(null)}>
+              Keep current
+            </Button>
+            <Button size="sm" onClick={() => {
+              if (pendingReload) reloadTab(pendingReload)
+              setPendingReload(null)
+            }}>
+              Reload
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

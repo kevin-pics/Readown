@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 interface TabBarProps {
   tabs: string[]
   activePath: string | null
+  modifiedPaths: Set<string>
   onActivate: (path: string) => void
   onClose: (path: string) => void
 }
@@ -33,7 +34,7 @@ function computeLabels(tabs: string[]): Record<string, string> {
   return labels
 }
 
-export function TabBar({ tabs, activePath, onActivate, onClose }: TabBarProps) {
+export function TabBar({ tabs, activePath, modifiedPaths, onActivate, onClose }: TabBarProps) {
   if (tabs.length === 0) return null
 
   const labels = computeLabels(tabs)
@@ -57,6 +58,11 @@ export function TabBar({ tabs, activePath, onActivate, onClose }: TabBarProps) {
           >
             <FileText className={cn('h-3.5 w-3.5 shrink-0', active && 'text-primary')} />
             <span className="truncate-start min-w-0">{name}</span>
+            {modifiedPaths.has(path) && (
+              <span className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                title="File changed on disk"
+              />
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation()

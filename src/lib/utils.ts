@@ -9,6 +9,16 @@ export function isExternalHref(href: string): boolean {
   return /^[a-zA-Z][\w+.-]*:/.test(href) || href.startsWith('//')
 }
 
+export function hashString(input: string): string {
+  let hash = 0
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i)
+    hash = (hash << 5) - hash + char
+    hash |= 0
+  }
+  return hash.toString(16)
+}
+
 export function resolveRelativePath(basePath: string, href: string): string | null {
   let target = href.split('#')[0].split('?')[0]
   if (!target) return null
