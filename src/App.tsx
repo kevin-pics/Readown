@@ -9,13 +9,6 @@ import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
@@ -200,7 +193,7 @@ export default function App() {
   const [contents, setContents] = useState<Record<string, string>>({})
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
-  const [pendingReload, setPendingReload] = useState<string | null>(null)
+
   const [isDragging, setIsDragging] = useState(false)
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -239,28 +232,17 @@ export default function App() {
 
   const setActivePathAndCheckModified = useCallback((path: string | null) => {
     setActivePath(path)
-    if (path && modifiedTabs.has(path)) {
-      setPendingReload(path)
-    }
-  }, [modifiedTabs])
+  }, [])
 
-  const handlePreviewFocus = useCallback(() => {
-    if (activePath && modifiedTabs.has(activePath)) {
-      setPendingReload(activePath)
-    }
-  }, [activePath, modifiedTabs])
+  const handlePreviewFocus = useCallback(() => {}, [])
 
   const openFile = useCallback(
     (path: string) => {
       setError(null)
       setActivePath(path)
       setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]))
-
-      if (modifiedTabs.has(path)) {
-        setPendingReload(path)
-      }
     },
-    [modifiedTabs]
+    []
   )
 
   const closeTab = useCallback(
@@ -441,6 +423,16 @@ export default function App() {
         return
       }
 
+      if (e.key.toLowerCase() === 'r') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          for (const path of tabs) reloadTab(path)
+        } else {
+          if (activePath) reloadTab(activePath)
+        }
+        return
+      }
+
       if (e.shiftKey) return
 
       if (e.key.toLowerCase() === 'w') {
@@ -466,7 +458,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -745,29 +737,6 @@ export default function App() {
         onScaleChange={handleScaleChange}
       />
 
-      <Dialog open={!!pendingReload} onOpenChange={(open) => {
-        if (!open) setPendingReload(null)
-      }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>File changed</DialogTitle>
-            <DialogDescription>
-              The file for this tab has changed on disk. Reload the latest content?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPendingReload(null)}>
-              Keep current
-            </Button>
-            <Button size="sm" onClick={() => {
-              if (pendingReload) reloadTab(pendingReload)
-              setPendingReload(null)
-            }}>
-              Reload
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
