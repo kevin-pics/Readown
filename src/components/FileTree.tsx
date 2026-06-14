@@ -40,19 +40,21 @@ interface TreeNodeProps {
 function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
   const [open, setOpen] = useState(true)
   const hasChildren = node.children && node.children.length > 0
-  const paddingLeft = depth * 12 + 8
+  const INDENT = 16
+  const folderPad = depth * INDENT + 8
+  const filePad = folderPad + 20
 
   if (node.type === 'file') {
     return (
       <button
         onClick={() => onSelect(node.path)}
         className={cn(
-          'group flex w-full items-center gap-2 py-1.5 pr-2 text-sm transition-colors',
+          'group flex w-full items-center gap-2 py-1 pr-2 text-sm transition-colors',
           selectedPath === node.path
             ? 'bg-accent text-accent-foreground'
             : 'text-foreground hover:bg-accent/60 hover:text-accent-foreground'
         )}
-        style={{ paddingLeft: `${paddingLeft}px` }}
+        style={{ paddingLeft: `${filePad}px` }}
       >
         <FileText
           className={cn(
@@ -71,8 +73,8 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
-          className="group flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground"
-          style={{ paddingLeft: `${paddingLeft}px` }}
+          className="group flex w-full items-center gap-1 py-1 pr-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground"
+          style={{ paddingLeft: `${folderPad}px` }}
         >
           <ChevronRight
             className={cn(
@@ -103,7 +105,7 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
           ) : (
             <span
               className="block py-1 text-xs text-muted-foreground"
-              style={{ paddingLeft: `${(depth + 1) * 12 + 12}px` }}
+              style={{ paddingLeft: `${(depth + 1) * INDENT + 28}px` }}
             >
               Empty folder
             </span>
