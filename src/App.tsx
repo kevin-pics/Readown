@@ -217,6 +217,19 @@ export default function App() {
 
 
 
+  const setActivePathAndCheckModified = useCallback((path: string | null) => {
+    setActivePath(path)
+    if (path && modifiedTabs.has(path)) {
+      setPendingReload(path)
+    }
+  }, [modifiedTabs])
+
+  const handlePreviewFocus = useCallback(() => {
+    if (activePath && modifiedTabs.has(activePath)) {
+      setPendingReload(activePath)
+    }
+  }, [activePath, modifiedTabs])
+
   const openFile = useCallback(
     (path: string) => {
       setError(null)
@@ -255,10 +268,10 @@ export default function App() {
         return nextSet
       })
       if (activePath === path) {
-        setActivePath(next.length ? next[Math.min(idx, next.length - 1)] : null)
+        setActivePathAndCheckModified(next.length ? next[Math.min(idx, next.length - 1)] : null)
       }
     },
-    [tabs, activePath]
+    [tabs, activePath, setActivePathAndCheckModified]
   )
 
   const reloadTab = useCallback(
@@ -391,10 +404,10 @@ export default function App() {
         const currentIdx = activePath ? tabs.indexOf(activePath) : -1
         if (e.key === '[') {
           const idx = currentIdx <= 0 ? tabs.length - 1 : currentIdx - 1
-          setActivePath(tabs[idx])
+          setActivePathAndCheckModified(tabs[idx])
         } else {
           const idx = currentIdx >= tabs.length - 1 ? 0 : currentIdx + 1
-          setActivePath(tabs[idx])
+          setActivePathAndCheckModified(tabs[idx])
         }
         return
       }
@@ -420,11 +433,11 @@ export default function App() {
       e.preventDefault()
       const n = Number(e.key)
       const idx = n === 9 ? tabs.length - 1 : n - 1
-      if (idx < tabs.length) setActivePath(tabs[idx])
+      if (idx < tabs.length) setActivePathAndCheckModified(tabs[idx])
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -626,13 +639,14 @@ export default function App() {
             </div>
           </div>
         )}
-        <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePath} onClose={closeTab} />
+        <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
         <div className="flex-1 overflow-hidden">
           <MarkdownPreview
             content={activePath ? contents[activePath] ?? '' : ''}
             filePath={activePath}
             contentWidth={contentWidth.value}
             onOpenRelative={handleOpenRelative}
+            onFocus={handlePreviewFocus}
           />
         </div>
       </main>

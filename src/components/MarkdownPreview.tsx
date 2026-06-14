@@ -11,6 +11,7 @@ interface MarkdownPreviewProps {
   filePath: string | null
   contentWidth: string
   onOpenRelative: (href: string) => void
+  onFocus?: () => void
 }
 
 marked.setOptions({
@@ -36,7 +37,7 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
@@ -84,6 +85,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   }, [html])
 
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    onFocus?.()
     const anchor = (e.target as HTMLElement).closest('a')
     if (!anchor) return
     const href = anchor.getAttribute('href')
