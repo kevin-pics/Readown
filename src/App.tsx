@@ -186,6 +186,19 @@ export default function App() {
     return electron.onCloseTab(() => closeActiveTabRef.current())
   }, [])
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      if (e.key < '1' || e.key > '9' || tabs.length === 0) return
+      e.preventDefault()
+      const n = Number(e.key)
+      const idx = n === 9 ? tabs.length - 1 : n - 1
+      if (idx < tabs.length) setActivePath(tabs[idx])
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [tabs])
+
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     const startX = e.clientX
