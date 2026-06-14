@@ -47,7 +47,7 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
       <button
         onClick={() => onSelect(node.path)}
         className={cn(
-          'group flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-sm transition-colors',
+          'group flex w-full items-center gap-2 py-1.5 pr-2 text-sm transition-colors',
           selectedPath === node.path
             ? 'bg-accent text-accent-foreground'
             : 'text-foreground hover:bg-accent/60 hover:text-accent-foreground'

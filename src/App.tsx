@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
-import { applyTheme, getThemeById, defaultThemeId, type Theme } from '@/lib/theme'
+import { applyTheme, getStoredTheme, storeTheme, type Theme } from '@/lib/theme'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
@@ -118,7 +118,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [theme, setTheme] = useState<Theme>(() => getThemeById(defaultThemeId))
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
   const [sidebarWidth, setSidebarWidth] = useState(229)
 
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function App() {
     e.preventDefault()
     const startX = e.clientX
     const startWidth = sidebarWidth
-    const MIN_W = 160
+    const MIN_W = 210
     const MAX_W = Math.max(MIN_W, window.innerWidth * 0.6)
 
     const onMove = (ev: MouseEvent) => {
@@ -205,6 +205,7 @@ export default function App() {
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
     applyTheme(newTheme)
+    storeTheme(newTheme)
   }
 
   const onDragOver = (e: React.DragEvent) => {
@@ -257,7 +258,7 @@ export default function App() {
     >
       <aside
         className="flex shrink-0 flex-col border-r bg-card"
-        style={{ width: `${sidebarWidth}px` }}
+        style={{ width: `${sidebarWidth}px`, minWidth: '210px' }}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2.5">

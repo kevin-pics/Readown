@@ -174,3 +174,23 @@ export function applyTheme(theme: Theme): void {
 export function getThemeById(id: string): Theme {
   return themes.find((t) => t.id === id) ?? themes[0]
 }
+
+const THEME_STORAGE_KEY = 'readown.theme'
+
+export function getStoredTheme(): Theme {
+  try {
+    const id = localStorage.getItem(THEME_STORAGE_KEY)
+    if (id) return getThemeById(id)
+  } catch {
+    // ignore storage access errors (e.g. private mode)
+  }
+  return getThemeById(defaultThemeId)
+}
+
+export function storeTheme(theme: Theme): void {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme.id)
+  } catch {
+    // ignore storage access errors
+  }
+}
