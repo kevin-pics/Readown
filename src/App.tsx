@@ -7,7 +7,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
-import { applyTheme, getStoredTheme, storeTheme, type Theme } from '@/lib/theme'
+import { applyFont, applyTheme, getStoredFont, getStoredTheme, storeFont, storeTheme, type FontOption, type Theme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
 interface DirectoryAPI {
@@ -183,13 +183,21 @@ export default function App() {
   const [rootName, setRootName] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
+  const [font, setFont] = useState<FontOption>(() => getStoredFont())
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openingDir, _setOpeningDir] = useState(false)
 
   useEffect(() => {
     applyTheme(theme)
-  }, [theme])
+    applyFont(font)
+  }, [theme, font])
+
+  const handleFontChange = useCallback((newFont: FontOption) => {
+    setFont(newFont)
+    applyFont(newFont)
+    storeFont(newFont)
+  }, [])
 
   useEffect(() => {
     if (!activePath || contents[activePath] !== undefined) return
@@ -278,7 +286,24 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+
+      if (e.shiftKey && (e.key === '[' || e.key === ']')) {
+        if (tabs.length === 0) return
+        e.preventDefault()
+        const currentIdx = activePath ? tabs.indexOf(activePath) : -1
+        if (e.key === '[') {
+          const idx = currentIdx <= 0 ? tabs.length - 1 : currentIdx - 1
+          setActivePath(tabs[idx])
+        } else {
+          const idx = currentIdx >= tabs.length - 1 ? 0 : currentIdx + 1
+          setActivePath(tabs[idx])
+        }
+        return
+      }
+
+      if (e.shiftKey) return
+
       if (e.key.toLowerCase() === 'w') {
         e.preventDefault()
         closeActiveTabRef.current()
@@ -302,7 +327,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen])
+  }, [tabs, handleOpen, activePath])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -519,6 +544,8 @@ export default function App() {
         onOpenChange={setSettingsOpen}
         currentTheme={theme}
         onThemeChange={handleThemeChange}
+        currentFont={font}
+        onFontChange={handleFontChange}
       />
     </div>
   )

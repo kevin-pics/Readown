@@ -267,3 +267,74 @@ export function storeTheme(theme: Theme): void {
     // ignore storage access errors
   }
 }
+
+export interface FontOption {
+  id: string
+  name: string
+  value: string
+}
+
+export const fontOptions: FontOption[] = [
+  {
+    id: 'sf-pro',
+    name: 'SF Pro',
+    value: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif",
+  },
+  {
+    id: 'sf-pro-rounded',
+    name: 'SF Pro Rounded',
+    value: "'SF Pro Rounded', -apple-system, BlinkMacSystemFont, sans-serif",
+  },
+  {
+    id: 'san-francisco',
+    name: 'San Francisco',
+    value: "-apple-system, BlinkMacSystemFont, 'San Francisco', 'SF Pro Text', sans-serif",
+  },
+  {
+    id: 'pingfang-sc',
+    name: 'PingFang SC',
+    value: "'PingFang SC', 'Helvetica Neue', Arial, sans-serif",
+  },
+  {
+    id: 'helvetica-neue',
+    name: 'Helvetica Neue',
+    value: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+  },
+  {
+    id: 'sf-mono',
+    name: 'SF Mono',
+    value: "'SF Mono', 'SF Mono Square', Menlo, Monaco, Consolas, monospace",
+  },
+  {
+    id: 'monaco',
+    name: 'Monaco',
+    value: "Monaco, 'SF Mono', Consolas, monospace",
+  },
+]
+
+const FONT_STORAGE_KEY = 'readown.font'
+
+export function getStoredFont(): FontOption {
+  try {
+    const id = localStorage.getItem(FONT_STORAGE_KEY)
+    if (id) {
+      const found = fontOptions.find((f) => f.id === id)
+      if (found) return found
+    }
+  } catch {
+    // ignore storage access errors
+  }
+  return fontOptions[0]
+}
+
+export function storeFont(font: FontOption): void {
+  try {
+    localStorage.setItem(FONT_STORAGE_KEY, font.id)
+  } catch {
+    // ignore storage access errors
+  }
+}
+
+export function applyFont(font: FontOption): void {
+  document.documentElement.style.setProperty('--reader-font', font.value)
+}
