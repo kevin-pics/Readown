@@ -6,7 +6,7 @@
   "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "vite",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron dist-electron/main/main.js\"",
+    "electron:dev": "vite",
     "build": "tsc -b && vite build && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview"

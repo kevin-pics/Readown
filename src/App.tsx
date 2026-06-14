@@ -475,6 +475,10 @@ export default function App() {
       setError(null)
       try {
         const nodes = await api.loadDirectory(source)
+        if (nodes.length === 0) {
+          setError('No Markdown files found in this directory. Please drop another directory.')
+          return
+        }
         setTree(nodes)
         setRootName(
           nodes[0]?.relativePath.split('/')[0] ??
@@ -640,20 +644,8 @@ export default function App() {
                 )}
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  {rootName ? 'No Markdown files found' : 'No directory open'}
-                </p>
-                <p className="max-w-[220px] text-xs text-muted-foreground">
-                  {rootName
-                    ? `No .md files were found in ${rootName}.`
-                    : 'Drop a directory here to start.'}
-                </p>
-                {rootName && (
-                  <Button size="sm" variant="secondary" onClick={handleOpen} disabled={openingDir}>
-                    <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-                    Open another directory
-                  </Button>
-                )}
+                <p className="text-sm font-medium">No directory open</p>
+                <p className="max-w-[220px] text-xs text-muted-foreground">Drop a directory here to start.</p>
               </div>
             </div>
           )}

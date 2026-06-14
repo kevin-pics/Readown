@@ -98,13 +98,9 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   if (!filePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center text-muted-foreground">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
           <BookOpen className="h-8 w-8" />
         </div>
-        <p className="text-lg font-medium">No file selected</p>
-        <p className="mt-1 max-w-sm text-sm">
-          Drop a directory here to start.
-        </p>
       </div>
     )
   }
