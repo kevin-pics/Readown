@@ -558,9 +558,12 @@ export default function App() {
 
   const dragCountRef = useRef(0)
 
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+
   const onDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!isFileDrag(e)) return
     if (dragCountRef.current === 0) setIsDragging(true)
     dragCountRef.current++
   }
@@ -573,6 +576,7 @@ export default function App() {
   const onDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (dragCountRef.current === 0) return
     dragCountRef.current--
     if (dragCountRef.current <= 0) {
       dragCountRef.current = 0
@@ -585,6 +589,7 @@ export default function App() {
     e.stopPropagation()
     dragCountRef.current = 0
     setIsDragging(false)
+    if (!isFileDrag(e)) return
     const item = e.dataTransfer.items[0]
     if (!item) return
 
