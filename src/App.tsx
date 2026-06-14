@@ -383,6 +383,10 @@ export default function App() {
     try {
       const nodes = await api.openDirectory()
       if (!nodes) return
+      if (nodes.length === 0) {
+        setError('No Markdown files found in this directory. Please select another one.')
+        return
+      }
       setTree(nodes)
       setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
       setTabs([])
@@ -476,7 +480,12 @@ export default function App() {
       try {
         const nodes = await api.loadDirectory(source)
         if (nodes.length === 0) {
-          setError('No Markdown files found in this directory. Please drop another directory.')
+          const isDropped = typeof source === 'string' && selectPath === undefined
+          setError(
+            isDropped
+              ? 'No Markdown files found in this directory. Please drop another one.'
+              : 'No Markdown files found in this directory. Please select another one.'
+          )
           return
         }
         setTree(nodes)
@@ -626,8 +635,16 @@ export default function App() {
         </div>
 
         {error && (
-          <div className="mx-3 mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
+          <div className="mx-3 mt-3 flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <span className="flex-1">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="-my-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md leading-none hover:bg-destructive/10 hover:text-destructive/80 focus:outline-none"
+              aria-label="Dismiss error"
+              title="Dismiss"
+            >
+              ×
+            </button>
           </div>
         )}
 
