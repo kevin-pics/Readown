@@ -1,0 +1,70 @@
+{
+  "name": "readown",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist-electron/main/main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron electron/main.ts\"",
+    "build": "tsc -b && vite build && electron-builder",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.readown.app",
+    "productName": "Readown",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    }
+  },
+  "description": "A modern Markdown directory reader",
+  "author": "Readown",
+  "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.13",
+    "@radix-ui/react-dialog": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.11",
+    "@radix-ui/react-separator": "^1.1.9",
+    "@radix-ui/react-slot": "^1.2.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dompurify": "^3.4.10",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^1.18.0",
+    "marked": "^18.0.5",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.1",
+    "@types/dompurify": "^3.0.5",
+    "@types/highlight.js": "^9.12.4",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^10.0.3",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.12",
+    "vite-plugin-electron": "^1.0.4",
+    "wait-on": "^9.0.10"
+  }
+}
