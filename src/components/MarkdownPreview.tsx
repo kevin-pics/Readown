@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { BookOpen, FileText } from 'lucide-react'
 import { isExternalHref } from '@/lib/utils'
@@ -31,12 +30,25 @@ marked.use({
   },
 })
 
+const codeThemeCss: Record<string, () => Promise<unknown>> = {
+  'atom-one-light': () => import('highlight.js/styles/atom-one-light.css'),
+  'github-dark': () => import('highlight.js/styles/github-dark.css'),
+}
+
 export function MarkdownPreview({ content, filePath, onOpenRelative }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
     return DOMPurify.sanitize(raw)
   }, [content])
+
+  useEffect(() => {
+    const codeTheme = document.documentElement.style.getPropertyValue('--code-theme').trim() || 'atom-one-light'
+    const load = codeThemeCss[codeTheme] ?? codeThemeCss['atom-one-light']
+    load().catch(() => {
+      // ignore failed css load
+    })
+  }, [filePath])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollPositions = useRef<Record<string, number>>({})

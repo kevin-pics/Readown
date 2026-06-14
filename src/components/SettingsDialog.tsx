@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { themes, type Theme } from '@/lib/theme'
 import {
   Dialog,
@@ -25,6 +25,22 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const [previewThemeId, setPreviewThemeId] = useState(currentTheme.id)
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key.startsWith('Arrow')) {
+        e.preventDefault()
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        onOpenChange(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onOpenChange])
+
   const handleSelect = (theme: Theme) => {
     setPreviewThemeId(theme.id)
     onThemeChange(theme)
@@ -43,9 +59,10 @@ export function SettingsDialog({
           {themes.map((theme) => (
             <button
               key={theme.id}
+              tabIndex={-1}
               onClick={() => handleSelect(theme)}
               className={cn(
-                'relative flex flex-col gap-2 rounded-lg border p-3 text-left transition-all hover:border-primary',
+                'relative flex flex-col gap-2 rounded-lg border p-3 text-left transition-all hover:border-primary focus:outline-none focus:ring-0',
                 previewThemeId === theme.id && 'border-primary ring-1 ring-primary'
               )}
             >
