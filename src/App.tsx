@@ -7,6 +7,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ConfirmCloseDialog } from '@/components/ConfirmCloseDialog'
+import { SaveDialog } from '@/components/SaveDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
@@ -237,6 +238,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [openingDir, _setOpeningDir] = useState(false)
+  const [saveDialogPath, setSaveDialogPath] = useState<string | null>(null)
   const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null)
 
   useEffect(() => {
@@ -313,76 +315,87 @@ export default function App() {
   }, [])
 
   const saveFile = useCallback(async (path: string) => {
-    const content = contents[path]
-    if (content === undefined) return
-
-    const isUntitled = isUntitledPath(path)
-    if (isUntitled && !dirPath) {
-      setError('Please open a directory first before saving.')
+    if (isUntitledPath(path)) {
+      setSaveDialogPath(path)
       return
     }
-    const fullPath = isUntitled ? `${dirPath}/${path}` : path
+    const content = contents[path]
+    if (content === undefined) return
+    try {
+      await api.writeFile(path, content)
+      setSnapshots((prev) => ({ ...prev, [path]: hashString(content) }))
+      setModifiedTabs((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+    } catch (err) {
+      setError(`Failed to save ${path.split(/[\\/]/).pop()}: ${(err as Error).message}`)
+    }
+  }, [api, contents])
+
+  const handleSaveAs = useCallback(async (name: string) => {
+    const untitledPath = saveDialogPath
+    if (!untitledPath) return
+    if (!dirPath) {
+      setError('Please open a directory first before saving.')
+      setSaveDialogPath(null)
+      return
+    }
+    setSaveDialogPath(null)
+
+    const content = contents[untitledPath]
+    if (content === undefined) return
+
+    const fullPath = `${dirPath}/${name}`
 
     try {
       await api.writeFile(fullPath, content)
 
-      if (isUntitled) {
-        // Replace untitled tab with the real file path
-        setTabs((prev) => {
-          const idx = prev.indexOf(path)
-          if (idx < 0) return prev
-          const next = [...prev]
-          next[idx] = fullPath
-          return next
-        })
-        setContents((prev) => {
-          const next: Record<string, string> = {}
-          for (const key of Object.keys(prev)) {
-            next[key === path ? fullPath : key] = prev[key]
-          }
-          return next
-        })
-        setSnapshots((prev) => {
-          const next: Record<string, string> = {}
-          for (const key of Object.keys(prev)) {
-            next[key === path ? fullPath : key] = prev[key]
-          }
-          next[fullPath] = hashString(content)
-          return next
-        })
-        setEditingPaths((prev) => {
-          const next = new Set(prev)
-          next.delete(path)
-          return next
-        })
-        setUnsavedChanges((prev) => {
-          const next = new Set(prev)
-          next.delete(path)
-          return next
-        })
-        if (activePath === path) setActivePath(fullPath)
-        // Reload directory tree
-        if (dirPath) {
-          const nodes = await api.loadDirectory(dirPath)
-          setTree(nodes)
-        }
-      } else {
-        setSnapshots((prev) => ({ ...prev, [fullPath]: hashString(content) }))
-        setModifiedTabs((prev) => {
-          const next = new Set(prev)
-          next.delete(path)
-          return next
-        })
-        setUnsavedChanges((prev) => {
-          const next = new Set(prev)
-          next.delete(path)
-          return next
-        })
+      // Reload the directory to pick up the new file
+      const nodes = await api.loadDirectory(dirPath)
+      setTree(nodes)
+
+      // Replace the untitled tab with the real file path
+      const idx = tabs.indexOf(untitledPath)
+      const nextTabs = [...tabs]
+      if (idx >= 0) nextTabs[idx] = fullPath
+      setTabs(nextTabs)
+
+      const nextContents: Record<string, string> = {}
+      for (const key of Object.keys(contents)) {
+        nextContents[key === untitledPath ? fullPath : key] = contents[key]
       }
+      nextContents[fullPath] = content
+      setContents(nextContents)
+
+      const nextSnapshots: Record<string, string> = {}
+      for (const key of Object.keys(snapshots)) {
+        nextSnapshots[key === untitledPath ? fullPath : key] = snapshots[key]
+      }
+      nextSnapshots[fullPath] = hashString(content)
+      setSnapshots(nextSnapshots)
+
+      setEditingPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(untitledPath)
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set(prev)
+        next.delete(untitledPath)
+        return next
+      })
+      setActivePath(fullPath)
     } catch (err) {
-      setError(`Failed to save ${path.split(/[\\/]/).pop()}: ${(err as Error).message}`)
+      setError(`Failed to save ${name}: ${(err as Error).message}`)
     }
-  }, [api, contents, dirPath, activePath])
+  }, [saveDialogPath, dirPath, contents, tabs, api, snapshots])
 
   const forceCloseTab = useCallback(
     (path: string) => {
@@ -610,9 +623,9 @@ export default function App() {
 
       if (e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        // Save all unsaved tabs
+        // Save all unsaved non-untitled tabs (untitled needs a dialog)
         for (const path of tabs) {
-          if (unsavedChanges.has(path)) {
+          if (!isUntitledPath(path) && unsavedChanges.has(path)) {
             void saveFile(path)
           }
         }
@@ -638,8 +651,12 @@ export default function App() {
       }
       if (e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (activePath && unsavedChanges.has(activePath)) {
-          void saveFile(activePath)
+        if (activePath) {
+          if (isUntitledPath(activePath)) {
+            setSaveDialogPath(activePath)
+          } else if (unsavedChanges.has(activePath)) {
+            void saveFile(activePath)
+          }
         }
         return
       }
@@ -1012,7 +1029,11 @@ export default function App() {
           const path = confirmClosePath
           setConfirmClosePath(null)
           if (!path) return
-          void saveFile(path).then(() => forceCloseTab(path))
+          if (isUntitledPath(path)) {
+            setSaveDialogPath(path)
+          } else {
+            void saveFile(path).then(() => forceCloseTab(path))
+          }
         }}
         onDiscard={() => {
           const path = confirmClosePath
@@ -1020,6 +1041,14 @@ export default function App() {
           if (path) forceCloseTab(path)
         }}
         onCancel={() => setConfirmClosePath(null)}
+      />
+
+      <SaveDialog
+        open={saveDialogPath !== null}
+        defaultName={saveDialogPath ? saveDialogPath : 'untitled-1.md'}
+        fileExists={(name) => !!(dirPath && fileExistsInTree(tree, `${dirPath}/${name}`))}
+        onSave={handleSaveAs}
+        onCancel={() => setSaveDialogPath(null)}
       />
 
     </div>
