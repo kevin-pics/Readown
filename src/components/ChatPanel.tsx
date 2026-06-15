@@ -90,25 +90,45 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
     const userMsg: ChatMessage = { role: 'user', content: text }
     const prevMessages = sessions[sessionKey] ?? []
     const newMessages = [...prevMessages, userMsg]
+    const key = sessionKey
 
-    setSessions((prev) => ({ ...prev, [sessionKey]: newMessages }))
+    setSessions((prev) => ({
+      ...prev,
+      [sessionKey]: [...(prev[sessionKey] ?? []), userMsg, { role: 'assistant' as const, content: '', thinking: '' }],
+    }))
     setInput('')
     setStreaming(true)
+
+    const abort = new AbortController()
+    abortRef.current = abort
 
     let systemContent = buildSystemPrompt(filePath, fileContent)
 
     if (useWebSearch) {
       try {
-        const searchQuery = await generateSearchQuery(systemContent, text, model)
+        const searchQuery = await generateSearchQuery(systemContent, text, model, abort.signal)
         if (searchQuery) {
-          const results = await webSearch(searchQuery)
+          const results = await webSearch(searchQuery, abort.signal)
           if (results.length > 0) {
             const searchCtx = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`).join('\n\n')
             systemContent += `\n\nThe following web search results are relevant to the user's question. Use them to provide an accurate, up-to-date answer:\n\n${searchCtx}`
           }
         }
       } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+          setSessions((prev) => {
+            const msgs = prev[key] ?? []
+            return { ...prev, [key]: msgs.slice(0, -1) }
+          })
+          setStreaming(false)
+          abortRef.current = null
+          return
+        }
         setErrorMsg((err as Error).message)
+        setSessions((prev) => {
+          const msgs = prev[key] ?? []
+          return { ...prev, [key]: msgs.slice(0, -1) }
+        })
         setStreaming(false)
         return
       }
@@ -116,13 +136,8 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
 
     const systemMsg: ChatMessage = { role: 'system', content: systemContent }
 
-    const abort = new AbortController()
-    abortRef.current = abort
-
     let accumulated = ''
     let accumulatedThinking = ''
-    const key = sessionKey
-    setSessions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { role: 'assistant' as const, content: '', thinking: '' }] }))
 
     try {
       const apiMessages = [systemMsg, ...newMessages]

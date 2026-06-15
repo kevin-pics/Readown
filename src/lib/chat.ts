@@ -49,7 +49,7 @@ function authHeaders(): Record<string, string> {
   return headers
 }
 
-export async function generateSearchQuery(context: string, question: string, model: string): Promise<string> {
+export async function generateSearchQuery(context: string, question: string, model: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
     method: 'POST',
     headers: authHeaders(),
@@ -61,6 +61,7 @@ export async function generateSearchQuery(context: string, question: string, mod
       ],
       stream: false,
     }),
+    signal,
   })
   if (!res.ok) {
     const err = await res.text().catch(() => res.statusText)
@@ -186,7 +187,7 @@ export interface WebSearchResult {
   content: string
 }
 
-export async function webSearch(query: string): Promise<WebSearchResult[]> {
+export async function webSearch(query: string, signal?: AbortSignal): Promise<WebSearchResult[]> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const apiKey = getStoredOllamaApiKey()
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
@@ -194,6 +195,7 @@ export async function webSearch(query: string): Promise<WebSearchResult[]> {
     method: 'POST',
     headers,
     body: JSON.stringify({ query, max_results: 5 }),
+    signal,
   })
   if (!res.ok) {
     const err = await res.text().catch(() => res.statusText)
