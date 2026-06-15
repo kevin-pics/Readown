@@ -187,7 +187,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
       >
         <div className="mb-6 flex items-center gap-2 border-b pb-4 text-xs text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{filePath}</span>
+          <span className="truncate">{filePath.startsWith('__untitled__') ? 'Untitled' : filePath}</span>
           {onToggleEdit && (
             <button
               onClick={onToggleEdit}

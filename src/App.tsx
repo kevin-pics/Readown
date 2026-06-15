@@ -6,6 +6,7 @@ import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
+import { SaveDialog } from '@/components/SaveDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen, MessageSquare, Pencil } from 'lucide-react'
@@ -194,6 +195,14 @@ function collectFilePaths(nodes: FileNode[]): string[] {
   return paths
 }
 
+const UNTITLED_PREFIX = '__untitled__'
+
+function isUntitledPath(path: string): boolean {
+  return path.startsWith(UNTITLED_PREFIX)
+}
+
+let untitledCounter = 0
+
 export default function App() {
   const [api] = useState<DirectoryAPI>(() => {
     if (window.readownAPI) return adaptElectronAPI(window.readownAPI)
@@ -224,6 +233,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [openingDir, _setOpeningDir] = useState(false)
+  const [saveDialogPath, setSaveDialogPath] = useState<string | null>(null)
 
   useEffect(() => {
     applyTheme(theme)
@@ -265,6 +275,16 @@ export default function App() {
     []
   )
 
+  const createUntitledTab = useCallback(() => {
+    untitledCounter++
+    const path = `${UNTITLED_PREFIX}${untitledCounter}`
+    const content = ''
+    setTabs((prev) => [...prev, path])
+    setContents((prev) => ({ ...prev, [path]: content }))
+    setEditingPaths((prev) => new Set(prev).add(path))
+    setActivePath(path)
+  }, [])
+
   const toggleEditMode = useCallback((path: string) => {
     setEditingPaths((prev) => {
       const next = new Set(prev)
@@ -283,6 +303,10 @@ export default function App() {
   }, [])
 
   const saveFile = useCallback(async (path: string) => {
+    if (isUntitledPath(path)) {
+      setSaveDialogPath(path)
+      return
+    }
     const content = contents[path]
     if (content === undefined) return
     try {
@@ -302,6 +326,64 @@ export default function App() {
       setError(`Failed to save ${path.split(/[\\/]/).pop()}: ${(err as Error).message}`)
     }
   }, [api, contents])
+
+  const handleSaveAs = useCallback(async (name: string) => {
+    const untitledPath = saveDialogPath
+    if (!untitledPath) return
+    if (!dirPath) {
+      setError('Please open a directory first before saving.')
+      setSaveDialogPath(null)
+      return
+    }
+    setSaveDialogPath(null)
+
+    const content = contents[untitledPath]
+    if (content === undefined) return
+
+    const fullPath = `${dirPath}/${name}`
+
+    try {
+      await api.writeFile(fullPath, content)
+
+      // Reload the directory to pick up the new file
+      const nodes = await api.loadDirectory(dirPath)
+      setTree(nodes)
+
+      // Replace the untitled tab with the real file path
+      const idx = tabs.indexOf(untitledPath)
+      const nextTabs = [...tabs]
+      if (idx >= 0) nextTabs[idx] = fullPath
+      setTabs(nextTabs)
+
+      const nextContents: Record<string, string> = {}
+      for (const key of Object.keys(contents)) {
+        nextContents[key === untitledPath ? fullPath : key] = contents[key]
+      }
+      nextContents[fullPath] = content
+      setContents(nextContents)
+
+      const nextSnapshots: Record<string, string> = {}
+      for (const key of Object.keys(snapshots)) {
+        nextSnapshots[key === untitledPath ? fullPath : key] = snapshots[key]
+      }
+      nextSnapshots[fullPath] = hashString(content)
+      setSnapshots(nextSnapshots)
+
+      setEditingPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(untitledPath)
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set(prev)
+        next.delete(untitledPath)
+        return next
+      })
+      setActivePath(fullPath)
+    } catch (err) {
+      setError(`Failed to save ${name}: ${(err as Error).message}`)
+    }
+  }, [saveDialogPath, dirPath, contents, tabs, api, snapshots])
 
   const closeTab = useCallback(
     (path: string) => {
@@ -371,7 +453,7 @@ export default function App() {
   )
 
   useEffect(() => {
-    if (!activePath || contents[activePath] !== undefined) return
+    if (!activePath || isUntitledPath(activePath) || contents[activePath] !== undefined) return
     let cancelled = false
     void (async () => {
       try {
@@ -396,6 +478,7 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       for (const path of tabs) {
+        if (isUntitledPath(path)) continue
         api
           .readFile(path)
           .then((text) => {
@@ -527,10 +610,19 @@ export default function App() {
         if (activePath) toggleEditMode(activePath)
         return
       }
+      if (e.key.toLowerCase() === 't') {
+        e.preventDefault()
+        createUntitledTab()
+        return
+      }
       if (e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (activePath && unsavedChanges.has(activePath)) {
-          void saveFile(activePath)
+        if (activePath) {
+          if (isUntitledPath(activePath)) {
+            setSaveDialogPath(activePath)
+          } else if (unsavedChanges.has(activePath)) {
+            void saveFile(activePath)
+          }
         }
         return
       }
@@ -552,7 +644,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode, createUntitledTab])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -895,6 +987,13 @@ export default function App() {
         onWidthChange={handleWidthChange}
         currentScale={scale}
         onScaleChange={handleScaleChange}
+      />
+
+      <SaveDialog
+        open={saveDialogPath !== null}
+        defaultName="untitled.md"
+        onSave={handleSaveAs}
+        onCancel={() => setSaveDialogPath(null)}
       />
 
     </div>
