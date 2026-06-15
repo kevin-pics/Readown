@@ -214,6 +214,7 @@ export default function App() {
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [openingDir, _setOpeningDir] = useState(false)
 
   useEffect(() => {
@@ -780,6 +781,7 @@ export default function App() {
               contentWidth={contentWidth.value}
               onOpenRelative={handleOpenRelative}
               onFocus={handlePreviewFocus}
+              onAskAI={(text) => { setChatOpen(true); setChatDraft(text) }}
             />
           </div>
           <ChatPanel
@@ -792,6 +794,8 @@ export default function App() {
               setChatWidth(w)
               try { localStorage.setItem('readown.chatWidth', String(w)) } catch { /* ignore */ }
             }}
+            draftInput={chatDraft}
+            onDraftConsumed={() => setChatDraft(null)}
           />
         </div>
       </main>

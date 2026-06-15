@@ -13,6 +13,8 @@ interface ChatPanelProps {
   fileContent: string
   width: number
   onResize: (width: number) => void
+  draftInput?: string | null
+  onDraftConsumed?: () => void
 }
 
 const SYSTEM_PROMPT_MAX = 8000
@@ -30,7 +32,7 @@ function buildSystemPrompt(filePath: string | null, fileContent: string): string
   return prompt
 }
 
-export function ChatPanel({ open, onClose, filePath, fileContent, width, onResize }: ChatPanelProps) {
+export function ChatPanel({ open, onClose, filePath, fileContent, width, onResize, draftInput, onDraftConsumed }: ChatPanelProps) {
   const [sessions, setSessions] = useState<Record<string, ChatMessage[]>>({})
   const [input, setInput] = useState('')
   const [model, setModel] = useState(() => getStoredChatModel())
@@ -52,6 +54,17 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [open])
+
+  useEffect(() => {
+    if (draftInput != null && open) {
+      setInput(draftInput)
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+        inputRef.current?.setSelectionRange(draftInput.length, draftInput.length)
+      })
+      onDraftConsumed?.()
+    }
+  }, [draftInput, open, onDraftConsumed])
 
   useEffect(() => {
     const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
