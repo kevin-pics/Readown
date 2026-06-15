@@ -9,7 +9,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { SaveDialog } from '@/components/SaveDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
-import { BookOpen, FileText, Folder, FolderOpen, MessageSquare, Pencil } from 'lucide-react'
+import { BookOpen, FileText, Folder, FolderOpen, MessageSquare } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
@@ -193,6 +193,14 @@ function collectFilePaths(nodes: FileNode[]): string[] {
     }
   }
   return paths
+}
+
+function fileExistsInTree(nodes: FileNode[], targetPath: string): boolean {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.path === targetPath) return true
+    if (node.children && fileExistsInTree(node.children, targetPath)) return true
+  }
+  return false
 }
 
 const UNTITLED_PREFIX = '__untitled__'
@@ -992,6 +1000,7 @@ export default function App() {
       <SaveDialog
         open={saveDialogPath !== null}
         defaultName="untitled.md"
+        fileExists={(name) => !!(dirPath && fileExistsInTree(tree, `${dirPath}/${name}`))}
         onSave={handleSaveAs}
         onCancel={() => setSaveDialogPath(null)}
       />
