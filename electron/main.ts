@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir, stat } from 'fs/promises'
+import { watch } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join, relative } from 'path'
 
@@ -309,6 +310,41 @@ ipcMain.handle(
       return info.isDirectory()
     } catch {
       return false
+    }
+  }
+)
+
+let currentWatcher: ReturnType<typeof watch> | null = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopWatching() {
+  if (currentWatcher) {
+    currentWatcher.close()
+    currentWatcher = null
+  }
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+}
+
+ipcMain.handle(
+  'watch-directory',
+  (_event: IpcMainInvokeEvent, dirPath: string | null): void => {
+    stopWatching()
+    if (!dirPath) return
+    try {
+      currentWatcher = watch(dirPath, { recursive: true }, () => {
+        if (debounceTimer) clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+          if (win) {
+            win.webContents.send('directory-changed', dirPath)
+          }
+        }, 300)
+      })
+    } catch {
+      stopWatching()
     }
   }
 )

@@ -16,8 +16,10 @@ export interface ReadownAPI {
   onCloseTab: (callback: () => void) => () => void
   onOpenDirectory: (callback: () => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
+  onDirectoryChange: (callback: (dirPath: string) => void) => () => void
   closeWindow: () => void
   isDirectory: (filePath: string) => Promise<boolean>
+  watchDirectory: (dirPath: string | null) => Promise<void>
   getPathForFile: (file: File) => string
 }
 
@@ -39,8 +41,14 @@ const api: ReadownAPI = {
   onCloseTab: (callback: () => void) => onChannel('close-current-tab', callback),
   onOpenDirectory: (callback: () => void) => onChannel('menu-open-directory', callback),
   onOpenSettings: (callback: () => void) => onChannel('menu-open-settings', callback),
+  onDirectoryChange: (callback: (dirPath: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, dirPath: string) => callback(dirPath)
+    ipcRenderer.on('directory-changed', handler)
+    return () => ipcRenderer.removeListener('directory-changed', handler)
+  },
   closeWindow: () => ipcRenderer.send('close-window'),
   isDirectory: (filePath: string) => ipcRenderer.invoke('is-directory', filePath),
+  watchDirectory: (dirPath: string | null) => ipcRenderer.invoke('watch-directory', dirPath),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 }
 

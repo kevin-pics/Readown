@@ -15,6 +15,8 @@ interface DirectoryAPI {
   loadDirectory: (source: string | FileSystemDirectoryHandle) => Promise<FileNode[]>
   readFile: (path: string) => Promise<string>
   onDragDrop: (callback: (source: string | FileSystemDirectoryHandle) => void) => () => void
+  onDirectoryChange?: (callback: (dirPath: string) => void) => () => void
+  watchDirectory?: (dirPath: string | null) => Promise<void>
 }
 
 function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
@@ -29,6 +31,9 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
     readFile: (path) => electronAPI.readFile(path),
     onDragDrop: (callback) =>
       electronAPI.onDragDrop((dirPath) => callback(dirPath)),
+    onDirectoryChange: (callback) =>
+      electronAPI.onDirectoryChange((dirPath) => callback(dirPath)),
+    watchDirectory: (dirPath) => electronAPI.watchDirectory(dirPath),
   }
 }
 
@@ -188,6 +193,7 @@ export default function App() {
     return createBrowserAPI()
   })
   const [tree, setTree] = useState<FileNode[]>([])
+  const [dirPath, setDirPath] = useState<string | null>(null)
   const [tabs, setTabs] = useState<string[]>([])
   const [activePath, setActivePath] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
@@ -388,6 +394,12 @@ export default function App() {
       setContents({})
       setError(null)
 
+      const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
+      setDirPath(rootPath || null)
+      if (rootPath && api.watchDirectory) {
+        void api.watchDirectory(rootPath)
+      }
+
       const filePaths = collectFilePaths(nodes)
       if (filePaths.length === 1) {
         openFile(filePaths[0])
@@ -498,6 +510,10 @@ export default function App() {
           return
         }
         setTree(nodes)
+        const rootDir = typeof source === 'string'
+          ? source
+          : (nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '') || null)
+        setDirPath(rootDir)
         setRootName(
           nodes[0]?.relativePath.split('/')[0] ??
             (typeof source === 'string'
@@ -508,6 +524,9 @@ export default function App() {
         setTabs([])
         setActivePath(null)
         setContents({})
+        if (typeof source === 'string' && api.watchDirectory) {
+          void api.watchDirectory(source)
+        }
         if (selectPath) {
           openFile(selectPath)
         } else {
@@ -529,6 +548,32 @@ export default function App() {
     })
     return () => unsubscribe()
   }, [api, loadDirectory])
+
+  useEffect(() => {
+    if (!api.onDirectoryChange) return
+    const unsubscribe = api.onDirectoryChange((changedPath) => {
+      if (changedPath === dirPath) {
+        void (async () => {
+          try {
+            const nodes = await api.loadDirectory(changedPath)
+            setTree(nodes)
+            setRootName(nodes[0]?.relativePath.split('/')[0] ?? changedPath.split('/').pop() ?? 'Directory')
+          } catch {
+            // ignore reload errors
+          }
+        })()
+      }
+    })
+    return () => unsubscribe()
+  }, [api, dirPath])
+
+  useEffect(() => {
+    return () => {
+      if (api.watchDirectory) {
+        void api.watchDirectory(null)
+      }
+    }
+  }, [api])
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme)
