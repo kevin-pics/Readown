@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
-import { CHAT_MODELS, type ChatMessage, getStoredChatModel, streamChat, storeChatModel, webSearch } from '@/lib/chat'
+import { CHAT_MODELS, type ChatMessage, generateSearchQuery, getStoredChatModel, streamChat, storeChatModel, webSearch } from '@/lib/chat'
 import { ArrowUp, Bot, ChevronDown, Copy, FileText, Globe, MessageSquarePlus, RefreshCw, Square, X } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
@@ -37,20 +37,15 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   const [thinkingLevel, setThinkingLevel] = useState<'none' | 'low' | 'medium' | 'high'>('medium')
   const [useWebSearch, setUseWebSearch] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const shouldAutoScroll = useRef(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const composingRef = useRef(false)
 
   const sessionKey = filePath ?? '__no_file__'
   const messages = useMemo(() => sessions[sessionKey] ?? [], [sessions, sessionKey])
-
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => {
-      const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
-      if (viewport) viewport.scrollTop = viewport.scrollHeight
-    })
-  }, [])
 
   useEffect(() => {
     if (open) {
@@ -59,8 +54,21 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   }, [open])
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, streaming, scrollToBottom])
+    const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+    if (!viewport) return
+    const onScroll = () => {
+      const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 2
+      shouldAutoScroll.current = atBottom
+    }
+    viewport.addEventListener('scroll', onScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', onScroll)
+  }, [open])
+
+  useEffect(() => {
+    if (!shouldAutoScroll.current) return
+    const viewport = scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+    if (viewport) viewport.scrollTop = viewport.scrollHeight
+  }, [messages, streaming])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -76,21 +84,9 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
     const text = input.trim()
     if (!text || streaming) return
 
-    let systemContent = buildSystemPrompt(filePath, fileContent)
+    setErrorMsg(null)
+    shouldAutoScroll.current = true
 
-    if (useWebSearch) {
-      try {
-        const results = await webSearch(text)
-        if (results.length > 0) {
-          const searchCtx = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`).join('\n\n')
-          systemContent += `\n\nThe following web search results are relevant to the user's question. Use them to provide an accurate, up-to-date answer:\n\n${searchCtx}`
-        }
-      } catch {
-        // search failed, continue without results
-      }
-    }
-
-    const systemMsg: ChatMessage = { role: 'system', content: systemContent }
     const userMsg: ChatMessage = { role: 'user', content: text }
     const prevMessages = sessions[sessionKey] ?? []
     const newMessages = [...prevMessages, userMsg]
@@ -98,6 +94,27 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
     setSessions((prev) => ({ ...prev, [sessionKey]: newMessages }))
     setInput('')
     setStreaming(true)
+
+    let systemContent = buildSystemPrompt(filePath, fileContent)
+
+    if (useWebSearch) {
+      try {
+        const searchQuery = await generateSearchQuery(systemContent, text, model)
+        if (searchQuery) {
+          const results = await webSearch(searchQuery)
+          if (results.length > 0) {
+            const searchCtx = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`).join('\n\n')
+            systemContent += `\n\nThe following web search results are relevant to the user's question. Use them to provide an accurate, up-to-date answer:\n\n${searchCtx}`
+          }
+        }
+      } catch (err) {
+        setErrorMsg((err as Error).message)
+        setStreaming(false)
+        return
+      }
+    }
+
+    const systemMsg: ChatMessage = { role: 'system', content: systemContent }
 
     const abort = new AbortController()
     abortRef.current = abort
@@ -332,13 +349,13 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
               <div
                 key={i}
                 className={cn(
-                  'flex',
+                  'flex min-w-0',
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
                 <div
                   className={cn(
-                    'rounded-lg px-3 py-2 text-sm',
+                    'min-w-0 rounded-lg px-3 py-2 text-sm',
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground max-w-[85%]'
                       : isAssistantFullWidth
@@ -399,6 +416,11 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
         </ScrollArea>
 
         <div className="shrink-0 border-t px-3 py-2">
+          {errorMsg && (
+            <p className="mb-2 rounded-md bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+              {errorMsg}
+            </p>
+          )}
           <div className="flex items-center gap-2 mb-2">
             {filePath && (
               <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground" title={filePath}>

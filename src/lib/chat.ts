@@ -24,6 +24,52 @@ export const DEFAULT_MODEL = 'glm-5.1:cloud'
 
 const OLLAMA_BASE_URL = 'http://localhost:11434'
 
+const OLLAMA_API_KEY_KEY = 'readown.ollamaApiKey'
+
+export function getStoredOllamaApiKey(): string {
+  try {
+    return localStorage.getItem(OLLAMA_API_KEY_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function storeOllamaApiKey(key: string): void {
+  try {
+    localStorage.setItem(OLLAMA_API_KEY_KEY, key)
+  } catch {
+    // ignore
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const apiKey = getStoredOllamaApiKey()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  return headers
+}
+
+export async function generateSearchQuery(context: string, question: string, model: string): Promise<string> {
+  const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a search query generator. Given the context and user question, generate a concise web search query (in the same language as the question) that will find relevant information to answer the question. Output ONLY the search query, nothing else.' },
+        { role: 'user', content: `Context:\n${context}\n\nQuestion: ${question}` },
+      ],
+      stream: false,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text().catch(() => res.statusText)
+    throw new Error(`Search query generation failed: ${res.status} ${err}`)
+  }
+  const data = await res.json()
+  return (data.message?.content ?? '').trim()
+}
+
 export async function* streamChat(
   messages: ChatMessage[],
   model: string,
@@ -39,7 +85,7 @@ export async function* streamChat(
 
   const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(body),
     signal,
   })
@@ -105,9 +151,12 @@ export interface WebSearchResult {
 }
 
 export async function webSearch(query: string): Promise<WebSearchResult[]> {
-  const res = await fetch(`${OLLAMA_BASE_URL}/api/web_search`, {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const apiKey = getStoredOllamaApiKey()
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  const res = await fetch('https://ollama.com/api/web_search', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ query, max_results: 5 }),
   })
   if (!res.ok) {

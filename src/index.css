@@ -191,6 +191,8 @@
 .prose-chat {
   font-size: 0.8125rem;
   line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .prose-chat p {
   margin-bottom: 0.5rem;
