@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
@@ -38,12 +39,6 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-interface SelectionMenu {
-  text: string
-  top: number
-  left: number
-}
-
 export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
@@ -63,27 +58,12 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   const scrollPositions = useRef<Record<string, number>>({})
   const currentPathRef = useRef<string | null>(null)
   const articleRef = useRef<HTMLElement>(null)
-
-  const [selectionMenu, setSelectionMenu] = useState<SelectionMenu | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuTextRef = useRef('')
   const menuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const savedRangeRef = useRef<Range | null>(null)
 
   const getViewport = () =>
     scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]') ?? null
-
-  // Restore selection when menu appears (browser may lose it during React re-render)
-  useLayoutEffect(() => {
-    if (selectionMenu && savedRangeRef.current) {
-      const sel = window.getSelection()
-      if (sel && sel.toString().trim() === '') {
-        sel.removeAllRanges()
-        sel.addRange(savedRangeRef.current)
-      }
-    }
-    if (!selectionMenu) {
-      savedRangeRef.current = null
-    }
-  }, [selectionMenu])
 
   useEffect(() => {
     const viewport = getViewport()
@@ -92,7 +72,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
       if (currentPathRef.current) {
         scrollPositions.current[currentPathRef.current] = viewport.scrollTop
       }
-      setSelectionMenu(null)
+      hideMenu()
     }
     viewport.addEventListener('scroll', onScroll, { passive: true })
     return () => viewport.removeEventListener('scroll', onScroll)
@@ -111,21 +91,42 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
     })
   }, [html])
 
-  // Hide menu on clicks outside the article or Ask AI button
+  // Hide menu on clicks outside the Ask AI button
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      // Don't hide menu or clear selection when clicking the Ask AI button
       if (target.closest('[data-ask-ai-btn]')) return
       if (menuTimer.current) {
         clearTimeout(menuTimer.current)
         menuTimer.current = null
       }
-      setSelectionMenu(null)
+      hideMenu()
     }
     document.addEventListener('mousedown', onDocMouseDown)
     return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [])
+
+  function showMenu(text: string, top: number, left: number) {
+    menuTextRef.current = text
+    const el = menuRef.current
+    if (!el) return
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+    el.style.opacity = '1'
+    el.style.pointerEvents = 'auto'
+    el.tabIndex = 0
+  }
+
+  function hideMenu() {
+    const el = menuRef.current
+    if (!el) return
+    el.style.top = '-9999px'
+    el.style.left = '0px'
+    el.style.opacity = '0'
+    el.style.pointerEvents = 'none'
+    el.tabIndex = -1
+    menuTextRef.current = ''
+  }
 
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     onFocus?.()
@@ -146,35 +147,27 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
     const sel = window.getSelection()
     const text = sel?.toString().trim() ?? ''
     if (!text || !onAskAI) {
-      setSelectionMenu(null)
+      hideMenu()
       return
     }
-    if (sel && sel.rangeCount > 0 && articleRef.current) {
-      const range = sel.getRangeAt(0)
-      savedRangeRef.current = range.cloneRange()
-      const selRect = range.getBoundingClientRect()
-      const artRect = articleRef.current.getBoundingClientRect()
+    if (sel && sel.rangeCount > 0) {
+      const selRect = sel.getRangeAt(0).getBoundingClientRect()
       menuTimer.current = setTimeout(() => {
-        setSelectionMenu({
-          text,
-          top: selRect.top - artRect.top - 6,
-          left: selRect.left + selRect.width / 2 - artRect.left,
-        })
+        showMenu(text, selRect.top - 6, selRect.left + selRect.width / 2)
       }, 200)
     }
   }
 
-  const handleMenuClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleMenuClick = () => {
     if (menuTimer.current) {
       clearTimeout(menuTimer.current)
       menuTimer.current = null
     }
-    if (selectionMenu?.text) {
-      onAskAI?.(selectionMenu.text)
+    const text = menuTextRef.current
+    if (text) {
+      onAskAI?.(text)
     }
-    savedRangeRef.current = null
-    setSelectionMenu(null)
+    hideMenu()
     window.getSelection()?.removeAllRanges()
   }
 
@@ -199,26 +192,31 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
         ) : (
           <p className="text-muted-foreground">Empty file.</p>
         )}
-        {selectionMenu && (
-          <div
-            onMouseDown={(e) => e.preventDefault()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onClick={handleMenuClick}
-            role="button"
-            data-ask-ai-btn
-            className="absolute flex -translate-x-1/2 items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-md hover:bg-accent"
-            style={{
-              top: `${selectionMenu.top}px`,
-              left: `${selectionMenu.left}px`,
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Ask AI
-          </div>
-        )}
       </article>
+      {createPortal(
+        <div
+          ref={menuRef}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleMenuClick}
+          role="button"
+          data-ask-ai-btn
+          tabIndex={-1}
+          className="fixed flex -translate-x-1/2 items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-md hover:bg-accent"
+          style={{
+            top: '-9999px',
+            left: '0px',
+            opacity: 0,
+            pointerEvents: 'none',
+            cursor: 'pointer',
+            userSelect: 'none',
+            zIndex: 9999,
+          }}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Ask AI
+        </div>,
+        document.body
+      )}
     </ScrollArea>
   )
 }
