@@ -26,7 +26,7 @@ function createWindow(): BrowserWindow {
   })
 
   if (isDev) {
-    win.loadURL('http://localhost:5173')
+    win.loadURL('http://localhost:3000')
   } else {
     win.loadFile(join(__dirname, '../../dist/index.html'))
       .catch((err) => {

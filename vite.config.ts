@@ -5,6 +5,9 @@ import electron from 'vite-plugin-electron'
 import { resolve } from 'path'
 
 export default defineConfig({
+  server: {
+    port: 3000,
+  },
   base: './',
   build: {
     cssMinify: false,

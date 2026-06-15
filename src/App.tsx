@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileNode } from '@/types/electron'
+import { ChatPanel } from '@/components/ChatPanel'
 import { FileTree } from '@/components/FileTree'
 import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
-import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
+import { BookOpen, FileText, Folder, FolderOpen, MessageSquare } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
@@ -208,7 +209,11 @@ export default function App() {
   const [contentWidth, setContentWidth] = useState<WidthOption>(() => getStoredWidth())
   const [scale, setScale] = useState<ScaleOption>(() => getStoredScale())
   const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [chatWidth, setChatWidth] = useState(() => {
+    try { return Number(localStorage.getItem('readown.chatWidth')) || 380 } catch { return 380 }
+  })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [openingDir, _setOpeningDir] = useState(false)
 
   useEffect(() => {
@@ -445,6 +450,12 @@ export default function App() {
         return
       }
 
+      if (e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        void handleOpen()
+        return
+      }
+
       if (e.shiftKey) return
 
       if (e.key.toLowerCase() === 'w') {
@@ -452,14 +463,14 @@ export default function App() {
         closeActiveTabRef.current()
         return
       }
-      if (e.key.toLowerCase() === 'o') {
-        e.preventDefault()
-        void handleOpen()
-        return
-      }
       if (e.key === ',') {
         e.preventDefault()
         setSettingsOpen(true)
+        return
+      }
+      if (e.key === '.') {
+        e.preventDefault()
+        setChatOpen((prev) => !prev)
         return
       }
       if (e.key < '1' || e.key > '9' || tabs.length === 0) return
@@ -705,7 +716,10 @@ export default function App() {
               </span>
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => setChatOpen((v) => !v)} title="Toggle chat (⌘.)" className="shrink-0">
+              <MessageSquare className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleOpen} disabled={openingDir} title="Open directory" className="shrink-0">
               <FolderOpen className="h-4 w-4" />
             </Button>
@@ -758,13 +772,26 @@ export default function App() {
 
       <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
         <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
-        <div className="flex-1 overflow-hidden">
-          <MarkdownPreview
-            content={activePath ? contents[activePath] ?? '' : ''}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            <MarkdownPreview
+              content={activePath ? contents[activePath] ?? '' : ''}
+              filePath={activePath}
+              contentWidth={contentWidth.value}
+              onOpenRelative={handleOpenRelative}
+              onFocus={handlePreviewFocus}
+            />
+          </div>
+          <ChatPanel
+            open={chatOpen}
+            onClose={() => setChatOpen(false)}
             filePath={activePath}
-            contentWidth={contentWidth.value}
-            onOpenRelative={handleOpenRelative}
-            onFocus={handlePreviewFocus}
+            fileContent={activePath ? contents[activePath] ?? '' : ''}
+            width={chatWidth}
+            onResize={(w) => {
+              setChatWidth(w)
+              try { localStorage.setItem('readown.chatWidth', String(w)) } catch { /* ignore */ }
+            }}
           />
         </div>
       </main>
