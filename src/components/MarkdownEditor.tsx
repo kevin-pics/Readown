@@ -132,6 +132,7 @@ export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSa
     })
 
     viewRef.current = view
+    view.focus()
 
     return () => {
       view.destroy()
