@@ -50,13 +50,18 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   const messages = useMemo(() => sessions[sessionKey] ?? [], [sessions, sessionKey])
 
   useEffect(() => {
-    if (draftInput != null && open) {
+    if (!open) return
+    if (draftInput != null) {
       setInput(draftInput)
       requestAnimationFrame(() => {
         inputRef.current?.focus()
         inputRef.current?.setSelectionRange(draftInput.length, draftInput.length)
       })
       onDraftConsumed?.()
+    } else {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+      })
     }
   }, [draftInput, open, onDraftConsumed])
 
