@@ -153,7 +153,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
     if (sel && sel.rangeCount > 0) {
       const selRect = sel.getRangeAt(0).getBoundingClientRect()
       menuTimer.current = setTimeout(() => {
-        showMenu(text, selRect.top - 32, selRect.left + selRect.width / 2)
+        showMenu(text, selRect.top - 40, selRect.left + selRect.width / 2)
       }, 200)
     }
   }
