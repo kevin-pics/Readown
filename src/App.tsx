@@ -7,9 +7,10 @@ import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { SaveDialog } from '@/components/SaveDialog'
+import { ConfirmCloseDialog } from '@/components/ConfirmCloseDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
-import { BookOpen, FileText, Folder, FolderOpen, MessageSquare } from 'lucide-react'
+import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
@@ -242,6 +243,7 @@ export default function App() {
   const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [openingDir, _setOpeningDir] = useState(false)
   const [saveDialogPath, setSaveDialogPath] = useState<string | null>(null)
+  const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null)
 
   useEffect(() => {
     applyTheme(theme)
@@ -393,7 +395,7 @@ export default function App() {
     }
   }, [saveDialogPath, dirPath, contents, tabs, api, snapshots])
 
-  const closeTab = useCallback(
+  const forceCloseTab = useCallback(
     (path: string) => {
       const idx = tabs.indexOf(path)
       const next = tabs.filter((p) => p !== path)
@@ -432,6 +434,17 @@ export default function App() {
       }
     },
     [tabs, activePath, setActivePathAndCheckModified]
+  )
+
+  const closeTab = useCallback(
+    (path: string) => {
+      if (unsavedChanges.has(path)) {
+        setConfirmClosePath(path)
+        return
+      }
+      forceCloseTab(path)
+    },
+    [unsavedChanges, forceCloseTab]
   )
 
   const reloadTab = useCallback(
@@ -606,6 +619,17 @@ export default function App() {
         return
       }
 
+      if (e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        // Save all unsaved non-untitled tabs
+        for (const path of tabs) {
+          if (!isUntitledPath(path) && unsavedChanges.has(path)) {
+            void saveFile(path)
+          }
+        }
+        return
+      }
+
       if (e.shiftKey) return
 
       if (e.key.toLowerCase() === 'w') {
@@ -652,7 +676,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode, createUntitledTab])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode, createUntitledTab, forceCloseTab])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -888,9 +912,6 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setChatOpen((v) => !v)} title="Toggle chat (⌘.)" className="shrink-0">
-              <MessageSquare className="h-4 w-4" />
-            </Button>
             <Button variant="ghost" size="icon" onClick={handleOpen} disabled={openingDir} title="Open directory" className="shrink-0">
               <FolderOpen className="h-4 w-4" />
             </Button>
@@ -954,6 +975,7 @@ export default function App() {
                 onChange={(value) => handleEditorChange(activePath, value)}
                 onSave={() => void saveFile(activePath)}
                 onToggleEdit={() => toggleEditMode(activePath)}
+                onToggleChat={() => setChatOpen((v) => !v)}
               />
             ) : (
               <MarkdownPreview
@@ -964,6 +986,7 @@ export default function App() {
                 onFocus={handlePreviewFocus}
                 onAskAI={(text) => { setChatOpen(true); setChatDraft(text) }}
                 onToggleEdit={activePath ? () => toggleEditMode(activePath) : undefined}
+                onToggleChat={() => setChatOpen((v) => !v)}
                 isEditing={false}
               />
             )}
@@ -1003,6 +1026,27 @@ export default function App() {
         fileExists={(name) => !!(dirPath && fileExistsInTree(tree, `${dirPath}/${name}`))}
         onSave={handleSaveAs}
         onCancel={() => setSaveDialogPath(null)}
+      />
+
+      <ConfirmCloseDialog
+        open={confirmClosePath !== null}
+        fileName={confirmClosePath ? (isUntitledPath(confirmClosePath) ? 'Untitled' : confirmClosePath.split(/[\\/]/).pop() ?? confirmClosePath) : ''}
+        onSave={() => {
+          const path = confirmClosePath
+          setConfirmClosePath(null)
+          if (!path) return
+          if (isUntitledPath(path)) {
+            setSaveDialogPath(path)
+          } else {
+            void saveFile(path).then(() => forceCloseTab(path))
+          }
+        }}
+        onDiscard={() => {
+          const path = confirmClosePath
+          setConfirmClosePath(null)
+          if (path) forceCloseTab(path)
+        }}
+        onCancel={() => setConfirmClosePath(null)}
       />
 
     </div>

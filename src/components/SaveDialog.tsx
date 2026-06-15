@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface SaveDialogProps {
   open: boolean
@@ -48,7 +49,7 @@ function SaveDialogInner({ defaultName, fileExists, onSave, onCancel }: Omit<Sav
     onSave(trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`)
   }, [name, onSave])
 
-  const isValid = name.trim().length > 0 && !name.trim().includes('/')
+  const isValid = name.trim().length > 0 && !name.trim().includes('/') && !exists
 
   return (
     <form onSubmit={handleSubmit}>
@@ -64,19 +65,22 @@ function SaveDialogInner({ defaultName, fileExists, onSave, onCancel }: Omit<Sav
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            'flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+            exists ? 'border-destructive' : 'border-input',
+          )}
           placeholder="untitled.md"
           autoFocus
         />
         {exists && (
           <p className="mt-2 text-xs text-destructive">
-            A file with this name already exists. It will be overwritten if you save.
+            A file with this name already exists. Please choose a different name.
           </p>
         )}
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={!isValid}>{exists ? 'Overwrite' : 'Save'}</Button>
+        <Button type="submit" disabled={!isValid}>Save</Button>
       </DialogFooter>
     </form>
   )

@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Eye, FileText, Pencil, Sparkles } from 'lucide-react'
+import { FileText, MessageSquare, Pencil, Sparkles } from 'lucide-react'
 import { cn, isExternalHref } from '@/lib/utils'
 
 interface MarkdownPreviewProps {
@@ -15,6 +15,7 @@ interface MarkdownPreviewProps {
   onFocus?: () => void
   onAskAI?: (text: string) => void
   onToggleEdit?: () => void
+  onToggleChat?: () => void
   isEditing?: boolean
 }
 
@@ -41,7 +42,7 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, isEditing }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, onToggleChat, isEditing }: MarkdownPreviewProps) {
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
@@ -188,16 +189,27 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
         <div className="mb-6 flex items-center gap-2 border-b pb-4 text-xs text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{filePath.startsWith('__untitled__') ? 'Untitled' : filePath}</span>
-          {onToggleEdit && (
-            <button
-              onClick={onToggleEdit}
-              className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
-              title={isEditing ? 'Switch to preview (⌘E)' : 'Switch to edit (⌘E)'}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </button>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onToggleChat && (
+              <button
+                onClick={onToggleChat}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Toggle chat (⌘.)"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onToggleEdit && (
+              <button
+                onClick={onToggleEdit}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                title={isEditing ? 'Switch to preview (⌘E)' : 'Switch to edit (⌘E)'}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+          </div>
         </div>
         {html ? (
           <div onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />

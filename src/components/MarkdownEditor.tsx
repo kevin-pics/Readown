@@ -9,7 +9,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Eye, FileText } from 'lucide-react'
+import { Eye, FileText, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MarkdownEditorProps {
@@ -19,6 +19,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void
   onSave: () => void
   onToggleEdit?: () => void
+  onToggleChat?: () => void
 }
 
 function isDarkMode(): boolean {
@@ -27,7 +28,7 @@ function isDarkMode(): boolean {
     window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSave, onToggleEdit }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSave, onToggleEdit, onToggleChat }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -274,16 +275,27 @@ export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSa
         <div className="mb-6 flex items-center gap-2 border-b pb-4 text-xs text-muted-foreground">
           <FileText className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{filePath?.startsWith('__untitled__') ? 'Untitled' : filePath}</span>
-          {onToggleEdit && (
-            <button
-              onClick={onToggleEdit}
-              className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors bg-primary/10 text-primary hover:bg-primary/20"
-              title="Switch to preview (⌘E)"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Preview
-            </button>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onToggleChat && (
+              <button
+                onClick={onToggleChat}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Toggle chat (⌘.)"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onToggleEdit && (
+              <button
+                onClick={onToggleEdit}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors bg-primary/10 text-primary hover:bg-primary/20"
+                title="Switch to preview (⌘E)"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            )}
+          </div>
         </div>
         <div ref={containerRef} />
       </div>
