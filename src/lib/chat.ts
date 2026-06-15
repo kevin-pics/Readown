@@ -127,6 +127,8 @@ export async function* streamChat(
 }
 
 const CHAT_MODEL_KEY = 'readown.chatModel'
+const WEB_SEARCH_KEY = 'readown.webSearch'
+const THINKING_LEVEL_KEY = 'readown.thinkingLevel'
 
 export function getStoredChatModel(): string {
   try {
@@ -139,6 +141,40 @@ export function getStoredChatModel(): string {
 export function storeChatModel(model: string): void {
   try {
     localStorage.setItem(CHAT_MODEL_KEY, model)
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredWebSearch(): boolean {
+  try {
+    return localStorage.getItem(WEB_SEARCH_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function storeWebSearch(enabled: boolean): void {
+  try {
+    localStorage.setItem(WEB_SEARCH_KEY, String(enabled))
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredThinkingLevel(): 'none' | 'low' | 'medium' | 'high' {
+  try {
+    const v = localStorage.getItem(THINKING_LEVEL_KEY)
+    if (v === 'none' || v === 'low' || v === 'medium' || v === 'high') return v
+    return 'medium'
+  } catch {
+    return 'medium'
+  }
+}
+
+export function storeThinkingLevel(level: 'none' | 'low' | 'medium' | 'high'): void {
+  try {
+    localStorage.setItem(THINKING_LEVEL_KEY, level)
   } catch {
     // ignore
   }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
-import { CHAT_MODELS, type ChatMessage, generateSearchQuery, getStoredChatModel, streamChat, storeChatModel, webSearch } from '@/lib/chat'
+import { CHAT_MODELS, type ChatMessage, generateSearchQuery, getStoredChatModel, getStoredThinkingLevel, getStoredWebSearch, streamChat, storeChatModel, storeThinkingLevel, storeWebSearch, webSearch } from '@/lib/chat'
 import { ArrowUp, Bot, ChevronDown, Copy, FileText, Globe, MessageSquarePlus, RefreshCw, Square, X } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
@@ -34,8 +34,8 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   const [sessions, setSessions] = useState<Record<string, ChatMessage[]>>({})
   const [input, setInput] = useState('')
   const [model, setModel] = useState(() => getStoredChatModel())
-  const [thinkingLevel, setThinkingLevel] = useState<'none' | 'low' | 'medium' | 'high'>('medium')
-  const [useWebSearch, setUseWebSearch] = useState(false)
+  const [thinkingLevel, setThinkingLevel] = useState<'none' | 'low' | 'medium' | 'high'>(() => getStoredThinkingLevel())
+  const [useWebSearch, setUseWebSearch] = useState(() => getStoredWebSearch())
   const [streaming, setStreaming] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -271,7 +271,9 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   }
 
   const handleThinkingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setThinkingLevel(e.target.value as 'none' | 'low' | 'medium' | 'high')
+    const v = e.target.value as 'none' | 'low' | 'medium' | 'high'
+    setThinkingLevel(v)
+    storeThinkingLevel(v)
   }
 
   const startResize = useCallback((e: React.MouseEvent) => {
@@ -429,7 +431,11 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
               </div>
             )}
             <button
-              onClick={() => setUseWebSearch((v) => !v)}
+              onClick={() => {
+                const next = !useWebSearch
+                setUseWebSearch(next)
+                storeWebSearch(next)
+              }}
               className={`flex items-center rounded border px-1.5 text-[11px] leading-none font-medium cursor-pointer transition-colors box-border overflow-hidden select-none ${useWebSearch ? 'h-[23px] border-primary bg-primary text-primary-foreground gap-1' : 'h-6 border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground'}`}
               title={useWebSearch ? 'Web search enabled' : 'Enable web search'}
             >
