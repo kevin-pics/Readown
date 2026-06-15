@@ -19,12 +19,17 @@ function fileNameWithoutExt(name: string): string {
 function computeLabels(tabs: string[]): Record<string, string> {
   const counts = new Map<string, number>()
   for (const path of tabs) {
+    if (path.startsWith('__untitled__')) continue
     const rawName = path.split(/[\\/]/).pop() ?? path
     counts.set(fileNameWithoutExt(rawName), (counts.get(fileNameWithoutExt(rawName)) ?? 0) + 1)
   }
 
   const labels: Record<string, string> = {}
   for (const path of tabs) {
+    if (path.startsWith('__untitled__')) {
+      labels[path] = 'Untitled'
+      continue
+    }
     const parts = path.split(/[\\/]/)
     const rawName = parts[parts.length - 1] ?? path
     const name = fileNameWithoutExt(rawName)

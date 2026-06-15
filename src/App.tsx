@@ -205,8 +205,20 @@ function fileExistsInTree(nodes: FileNode[], targetPath: string): boolean {
 }
 
 function isUntitledPath(path: string): boolean {
-  return path.includes('/') === false && path.startsWith('untitled-') && path.endsWith('.md')
+  return path.startsWith('__untitled__')
 }
+
+function computeDefaultSaveName(tree: FileNode[], dirPath: string | null): string {
+  let n = 1
+  while (true) {
+    const name = `untitled-${n}.md`
+    if (!dirPath || !fileExistsInTree(tree, `${dirPath}/${name}`)) break
+    n++
+  }
+  return `untitled-${n}.md`
+}
+
+let untitledCounter = 0
 
 export default function App() {
   const [api] = useState<DirectoryAPI>(() => {
@@ -282,20 +294,13 @@ export default function App() {
   )
 
   const createUntitledTab = useCallback(() => {
-    // Find next available untitled-N.md name that doesn't conflict with open tabs or tree
-    let n = 1
-    const tabSet = new Set(tabs)
-    while (true) {
-      const name = `untitled-${n}.md`
-      if (!tabSet.has(name) && !fileExistsInTree(tree, name)) break
-      n++
-    }
-    const path = `untitled-${n}.md`
+    untitledCounter++
+    const path = `__untitled__${untitledCounter}`
     setTabs((prev) => [...prev, path])
     setContents((prev) => ({ ...prev, [path]: '' }))
     setEditingPaths((prev) => new Set(prev).add(path))
     setActivePath(path)
-  }, [tabs, tree])
+  }, [])
 
   const toggleEditMode = useCallback((path: string) => {
     setEditingPaths((prev) => {
@@ -1024,7 +1029,7 @@ export default function App() {
 
       <ConfirmCloseDialog
         open={confirmClosePath !== null}
-        fileName={confirmClosePath ? (confirmClosePath.split(/[\\/]/).pop() ?? confirmClosePath) : ''}
+        fileName={confirmClosePath ? (isUntitledPath(confirmClosePath) ? 'Untitled' : (confirmClosePath.split(/[\\/]/).pop() ?? confirmClosePath)) : ''}
         onSave={() => {
           const path = confirmClosePath
           setConfirmClosePath(null)
@@ -1045,7 +1050,7 @@ export default function App() {
 
       <SaveDialog
         open={saveDialogPath !== null}
-        defaultName={saveDialogPath ? saveDialogPath : 'untitled-1.md'}
+        defaultName={computeDefaultSaveName(tree, dirPath)}
         fileExists={(name) => !!(dirPath && fileExistsInTree(tree, `${dirPath}/${name}`))}
         onSave={handleSaveAs}
         onCancel={() => setSaveDialogPath(null)}
