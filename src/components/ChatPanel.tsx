@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
-import { CHAT_MODELS, type ChatMessage, getStoredChatModel, streamChat, storeChatModel } from '@/lib/chat'
-import { ArrowUp, Bot, ChevronDown, FileText, Square, X } from 'lucide-react'
+import { CHAT_MODELS, type ChatMessage, getStoredChatModel, streamChat, storeChatModel, webSearch } from '@/lib/chat'
+import { ArrowUp, Bot, ChevronDown, Copy, FileText, Globe, MessageSquarePlus, RefreshCw, Square, X } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ChatPanelProps {
@@ -35,6 +35,7 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   const [input, setInput] = useState('')
   const [model, setModel] = useState(() => getStoredChatModel())
   const [thinkingLevel, setThinkingLevel] = useState<'none' | 'low' | 'medium' | 'high'>('medium')
+  const [useWebSearch, setUseWebSearch] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -59,7 +60,7 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, scrollToBottom])
+  }, [messages, streaming, scrollToBottom])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -75,7 +76,21 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
     const text = input.trim()
     if (!text || streaming) return
 
-    const systemMsg: ChatMessage = { role: 'system', content: buildSystemPrompt(filePath, fileContent) }
+    let systemContent = buildSystemPrompt(filePath, fileContent)
+
+    if (useWebSearch) {
+      try {
+        const results = await webSearch(text)
+        if (results.length > 0) {
+          const searchCtx = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`).join('\n\n')
+          systemContent += `\n\nThe following web search results are relevant to the user's question. Use them to provide an accurate, up-to-date answer:\n\n${searchCtx}`
+        }
+      } catch {
+        // search failed, continue without results
+      }
+    }
+
+    const systemMsg: ChatMessage = { role: 'system', content: systemContent }
     const userMsg: ChatMessage = { role: 'user', content: text }
     const prevMessages = sessions[sessionKey] ?? []
     const newMessages = [...prevMessages, userMsg]
@@ -88,35 +103,134 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
     abortRef.current = abort
 
     let accumulated = ''
+    let accumulatedThinking = ''
     const key = sessionKey
-    setSessions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { role: 'assistant', content: '' }] }))
+    setSessions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { role: 'assistant' as const, content: '', thinking: '' }] }))
 
     try {
       const apiMessages = [systemMsg, ...newMessages]
       for await (const chunk of streamChat(apiMessages, model, { think: thinkingLevel !== 'none', signal: abort.signal })) {
-        accumulated += chunk
-        const captured = accumulated
-        setSessions((prev) => {
-          const msgs = prev[key] ?? []
-          return { ...prev, [key]: [...msgs.slice(0, -1), { role: 'assistant' as const, content: captured }] }
-        })
+        if (chunk.type === 'thinking') {
+          accumulatedThinking += chunk.text
+          const capturedThinking = accumulatedThinking
+          setSessions((prev) => {
+            const msgs = prev[key] ?? []
+            return { ...prev, [key]: [...msgs.slice(0, -1), { role: 'assistant' as const, content: accumulated, thinking: capturedThinking }] }
+          })
+        } else {
+          accumulated += chunk.text
+          const captured = accumulated
+          const capturedThinking = accumulatedThinking
+          setSessions((prev) => {
+            const msgs = prev[key] ?? []
+            return { ...prev, [key]: [...msgs.slice(0, -1), { role: 'assistant' as const, content: captured, thinking: capturedThinking }] }
+          })
+        }
       }
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
+      if ((err as Error).name === 'AbortError') {
+        // Remove the empty assistant message if aborted before any content arrived
         setSessions((prev) => {
           const msgs = prev[key] ?? []
-          return { ...prev, [key]: [...msgs.slice(0, -1), { role: 'assistant' as const, content: accumulated || `Error: ${(err as Error).message}` }] }
+          const last = msgs[msgs.length - 1]
+          if (msgs.length > 0 && last.role === 'assistant' && !last.content && !last.thinking) {
+            return { ...prev, [key]: msgs.slice(0, -1) }
+          }
+          return prev
+        })
+      } else {
+        setSessions((prev) => {
+          const msgs = prev[key] ?? []
+          return { ...prev, [key]: [...msgs.slice(0, -1), { role: 'assistant' as const, content: accumulated || `Error: ${(err as Error).message}`, thinking: accumulatedThinking }] }
         })
       }
     } finally {
       setStreaming(false)
       abortRef.current = null
     }
-  }, [input, sessions, streaming, model, thinkingLevel, filePath, fileContent, sessionKey])
+  }, [input, sessions, streaming, model, thinkingLevel, useWebSearch, filePath, fileContent, sessionKey])
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort()
   }, [])
+
+  const handleCopy = useCallback((text: string) => {
+    navigator.clipboard.writeText(text)
+  }, [])
+
+  const handleRegenerate = useCallback((msgIdx: number) => {
+    const key = sessionKey
+    const msgs = sessions[key] ?? []
+    if (msgs[msgIdx]?.role !== 'assistant' || msgIdx === 0) return
+    const userMsg = msgs[msgIdx - 1]
+    if (userMsg?.role !== 'user') return
+    // Remove user + assistant message, then re-send
+    setSessions((prev) => {
+      const m = prev[key] ?? []
+      return { ...prev, [key]: m.slice(0, msgIdx - 1) }
+    })
+    // Re-send with original user content
+    const originalInput = userMsg.content
+    setInput('')
+    setStreaming(true)
+    const abort = new AbortController()
+    abortRef.current = abort
+
+    const systemContent = buildSystemPrompt(filePath, fileContent)
+    const prevMsgs = (sessions[key] ?? []).slice(0, msgIdx - 1)
+    const newUserMsg: ChatMessage = { role: 'user', content: originalInput }
+    const systemMsg: ChatMessage = { role: 'system', content: systemContent }
+    setSessions((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), newUserMsg] }))
+
+    let accumulated = ''
+    let accumulatedThinking = ''
+    setSessions((prev) => {
+      const m = prev[key] ?? []
+      return { ...prev, [key]: [...m, { role: 'assistant' as const, content: '', thinking: '' }] }
+    })
+
+    void (async () => {
+      try {
+        for await (const chunk of streamChat([systemMsg, ...prevMsgs, newUserMsg], model, { think: thinkingLevel !== 'none', signal: abort.signal })) {
+          if (chunk.type === 'thinking') {
+            accumulatedThinking += chunk.text
+            const ct = accumulatedThinking
+            setSessions((prev) => {
+              const m = prev[key] ?? []
+              return { ...prev, [key]: [...m.slice(0, -1), { role: 'assistant' as const, content: accumulated, thinking: ct }] }
+            })
+          } else {
+            accumulated += chunk.text
+            const cc = accumulated
+            const ct = accumulatedThinking
+            setSessions((prev) => {
+              const m = prev[key] ?? []
+              return { ...prev, [key]: [...m.slice(0, -1), { role: 'assistant' as const, content: cc, thinking: ct }] }
+            })
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+          setSessions((prev) => {
+            const m = prev[key] ?? []
+            const last = m[m.length - 1]
+            if (m.length > 0 && last.role === 'assistant' && !last.content && !last.thinking) {
+              return { ...prev, [key]: m.slice(0, -1) }
+            }
+            return prev
+          })
+        } else {
+          setSessions((prev) => {
+            const m = prev[key] ?? []
+            return { ...prev, [key]: [...m.slice(0, -1), { role: 'assistant' as const, content: accumulated || `Error: ${(err as Error).message}`, thinking: accumulatedThinking }] }
+          })
+        }
+      } finally {
+        setStreaming(false)
+        abortRef.current = null
+      }
+    })()
+  }, [sessions, sessionKey, model, thinkingLevel, filePath, fileContent])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !composingRef.current) {
@@ -184,23 +298,37 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
             <Bot className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Chat</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Close chat"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                if (streaming) abortRef.current?.abort()
+                setSessions((prev) => ({ ...prev, [sessionKey]: [] }))
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="New chat"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <ScrollArea ref={scrollRef} className="flex-1 overflow-hidden">
+        <ScrollArea ref={scrollRef} className="min-h-0 flex-1 overflow-hidden">
           <div className="space-y-3 p-4">
             {messages.length === 0 && (
               <p className="py-8 text-center text-xs text-muted-foreground">
                 Ask anything about the current document.
               </p>
             )}
-            {messages.map((msg, i) => (
+            {messages.map((msg, i) => {
+              const isAssistantFullWidth = msg.role === 'assistant' && !!(msg.thinking || msg.content)
+              return (
               <div
                 key={i}
                 className={cn(
@@ -210,31 +338,63 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
               >
                 <div
                   className={cn(
-                    'max-w-full rounded-lg px-3 py-2 text-sm',
+                    'rounded-lg px-3 py-2 text-sm',
                     msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-foreground'
+                      ? 'bg-primary text-primary-foreground max-w-[85%]'
+                      : isAssistantFullWidth
+                        ? 'bg-muted text-foreground w-full'
+                        : 'bg-muted text-foreground w-fit'
                   )}
                 >
                   {msg.role === 'assistant' ? (
-                    msg.content ? (
-                      <div
-                        className="prose-chat prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{
-                          __html: DOMPurify.sanitize(marked.parse(msg.content) as string),
-                        }}
-                      />
-                    ) : (
-                      <div className="typing-indicator flex items-center gap-1.5 py-1">
-                        <span /><span /><span />
-                      </div>
-                    )
+                    <>
+                      {msg.thinking && (
+                        <details className="mb-2" open={streaming && !msg.content}>
+                          <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+                            {streaming && !msg.content ? 'Thinking…' : 'Show Thinking'}
+                          </summary>
+                          <div className="mt-1 max-h-32 overflow-y-auto rounded border border-border/50 bg-background/50 px-2 py-1 text-xs text-muted-foreground">
+                            <div className="whitespace-pre-wrap break-words">{msg.thinking}</div>
+                          </div>
+                        </details>
+                      )}
+                      {msg.content ? (
+                        <div
+                          className="prose-chat prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: DOMPurify.sanitize(marked.parse(msg.content) as string),
+                          }}
+                        />
+                      ) : !msg.thinking ? (
+                        <div className="typing-indicator flex items-center gap-1.5 py-1">
+                          <span /><span /><span />
+                        </div>
+                      ) : null}
+                      {msg.content && !streaming && (
+                        <div className="mt-1.5 flex items-center gap-1 border-t border-border/40 pt-1.5">
+                          <button
+                            onClick={() => handleRegenerate(i)}
+                            className="flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            title="Regenerate"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleCopy(msg.content)}
+                            className="flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            title="Copy"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   )}
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </ScrollArea>
 
@@ -246,11 +406,19 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
                 <span className="truncate">{filePath.split(/[\\/]/).pop()}</span>
               </div>
             )}
+            <button
+              onClick={() => setUseWebSearch((v) => !v)}
+              className={`flex items-center rounded border px-1.5 text-[11px] leading-none font-medium cursor-pointer transition-colors box-border overflow-hidden select-none ${useWebSearch ? 'h-[23px] border-primary bg-primary text-primary-foreground gap-1' : 'h-6 border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+              title={useWebSearch ? 'Web search enabled' : 'Enable web search'}
+            >
+              <Globe className="h-3 w-3 shrink-0" />
+              {useWebSearch && <span className="shrink-0">ON</span>}
+            </button>
             <div className="relative shrink-0">
               <select
                 value={model}
                 onChange={handleModelChange}
-                className="h-6 rounded border bg-background px-1.5 pr-5 text-[11px] text-foreground appearance-none cursor-pointer"
+                className="flex h-6 items-center rounded border bg-background px-1.5 pr-5 text-[11px] leading-none text-foreground appearance-none cursor-pointer box-border"
               >
                 {CHAT_MODELS.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -264,9 +432,9 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
               <select
                 value={thinkingLevel}
                 onChange={handleThinkingChange}
-                className="h-6 rounded border bg-background px-1.5 pr-5 text-[11px] text-foreground appearance-none cursor-pointer"
+                className="flex h-6 items-center rounded border bg-background px-1.5 pr-5 text-[11px] leading-none text-foreground appearance-none cursor-pointer box-border"
               >
-                <option value="none">None</option>
+                <option value="none">Non-thinking</option>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>

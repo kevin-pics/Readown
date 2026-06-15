@@ -1,6 +1,12 @@
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
+  thinking?: string
+}
+
+export interface StreamChunk {
+  type: 'content' | 'thinking'
+  text: string
 }
 
 export interface ChatModel {
@@ -22,7 +28,7 @@ export async function* streamChat(
   messages: ChatMessage[],
   model: string,
   options?: { think?: boolean; signal?: AbortSignal }
-): AsyncGenerator<string, void, unknown> {
+): AsyncGenerator<StreamChunk, void, unknown> {
   const { think, signal } = options ?? {}
   const body: Record<string, unknown> = {
     model,
@@ -60,8 +66,11 @@ export async function* streamChat(
       if (!trimmed) continue
       try {
         const obj = JSON.parse(trimmed)
+        if (obj.message?.thinking) {
+          yield { type: 'thinking', text: obj.message.thinking }
+        }
         if (obj.message?.content) {
-          yield obj.message.content
+          yield { type: 'content', text: obj.message.content }
         }
         if (obj.done) return
       } catch {
@@ -87,4 +96,24 @@ export function storeChatModel(model: string): void {
   } catch {
     // ignore
   }
+}
+
+export interface WebSearchResult {
+  title: string
+  url: string
+  content: string
+}
+
+export async function webSearch(query: string): Promise<WebSearchResult[]> {
+  const res = await fetch(`${OLLAMA_BASE_URL}/api/web_search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, max_results: 5 }),
+  })
+  if (!res.ok) {
+    const err = await res.text().catch(() => res.statusText)
+    throw new Error(`Web search error: ${res.status} ${err}`)
+  }
+  const data = await res.json()
+  return data.results ?? []
 }
