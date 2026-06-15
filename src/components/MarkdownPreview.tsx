@@ -213,9 +213,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
         </div>
         {html ? (
           <div onClick={handleClick} dangerouslySetInnerHTML={{ __html: html }} />
-        ) : (
-          <p className="text-muted-foreground">Empty file.</p>
-        )}
+        ) : null}
       </article>
       {createPortal(
         <div
