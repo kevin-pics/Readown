@@ -19,6 +19,7 @@ export interface ReadownAPI {
   isDirectory: (filePath: string) => Promise<boolean>
   watchDirectory: (dirPath: string | null) => Promise<void>
   getPathForFile: (file: File) => string
+  writeFile: (filePath: string, content: string) => Promise<void>
 }
 
 declare global {

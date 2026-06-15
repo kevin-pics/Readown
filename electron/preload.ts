@@ -21,6 +21,7 @@ export interface ReadownAPI {
   isDirectory: (filePath: string) => Promise<boolean>
   watchDirectory: (dirPath: string | null) => Promise<void>
   getPathForFile: (file: File) => string
+  writeFile: (filePath: string, content: string) => Promise<void>
 }
 
 function onChannel(channel: string, callback: () => void) {
@@ -50,6 +51,7 @@ const api: ReadownAPI = {
   isDirectory: (filePath: string) => ipcRenderer.invoke('is-directory', filePath),
   watchDirectory: (dirPath: string | null) => ipcRenderer.invoke('watch-directory', dirPath),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write-file', filePath, content),
 }
 
 contextBridge.exposeInMainWorld('readownAPI', api)

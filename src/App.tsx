@@ -3,11 +3,12 @@ import type { FileNode } from '@/types/electron'
 import { ChatPanel } from '@/components/ChatPanel'
 import { FileTree } from '@/components/FileTree'
 import { MarkdownPreview } from '@/components/MarkdownPreview'
+import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
-import { BookOpen, FileText, Folder, FolderOpen, MessageSquare } from 'lucide-react'
+import { BookOpen, FileText, Folder, FolderOpen, MessageSquare, Pencil } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
@@ -15,6 +16,7 @@ interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
   loadDirectory: (source: string | FileSystemDirectoryHandle) => Promise<FileNode[]>
   readFile: (path: string) => Promise<string>
+  writeFile: (path: string, content: string) => Promise<void>
   onDragDrop: (callback: (source: string | FileSystemDirectoryHandle) => void) => () => void
   onDirectoryChange?: (callback: (dirPath: string) => void) => () => void
   watchDirectory?: (dirPath: string | null) => Promise<void>
@@ -30,6 +32,7 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
       return electronAPI.scanDirectory(source)
     },
     readFile: (path) => electronAPI.readFile(path),
+    writeFile: (path, content) => electronAPI.writeFile(path, content),
     onDragDrop: (callback) =>
       electronAPI.onDragDrop((dirPath) => callback(dirPath)),
     onDirectoryChange: (callback) =>
@@ -173,6 +176,9 @@ function createBrowserAPI(): DirectoryAPI {
       return file.text()
     },
     onDragDrop: () => () => {},
+    writeFile: async () => {
+      throw new Error('Saving files is not supported in browser mode. Please use the Electron app.')
+    },
   }
 }
 
@@ -200,6 +206,8 @@ export default function App() {
   const [contents, setContents] = useState<Record<string, string>>({})
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
+  const [editingPaths, setEditingPaths] = useState<Set<string>>(new Set())
+  const [unsavedChanges, setUnsavedChanges] = useState<Set<string>>(new Set())
 
   const [isDragging, setIsDragging] = useState(false)
   const [rootName, setRootName] = useState<string | null>(null)
@@ -257,6 +265,44 @@ export default function App() {
     []
   )
 
+  const toggleEditMode = useCallback((path: string) => {
+    setEditingPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }, [])
+
+  const handleEditorChange = useCallback((path: string, value: string) => {
+    setContents((prev) => ({ ...prev, [path]: value }))
+    setUnsavedChanges((prev) => new Set(prev).add(path))
+  }, [])
+
+  const saveFile = useCallback(async (path: string) => {
+    const content = contents[path]
+    if (content === undefined) return
+    try {
+      await api.writeFile(path, content)
+      setSnapshots((prev) => ({ ...prev, [path]: hashString(content) }))
+      setModifiedTabs((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+    } catch (err) {
+      setError(`Failed to save ${path.split(/[\\/]/).pop()}: ${(err as Error).message}`)
+    }
+  }, [api, contents])
+
   const closeTab = useCallback(
     (path: string) => {
       const idx = tabs.indexOf(path)
@@ -280,6 +326,16 @@ export default function App() {
         const nextSet = new Set(prev)
         nextSet.delete(path)
         return nextSet
+      })
+      setEditingPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set(prev)
+        next.delete(path)
+        return next
       })
       if (activePath === path) {
         setActivePathAndCheckModified(next.length ? next[Math.min(idx, next.length - 1)] : null)
@@ -398,6 +454,8 @@ export default function App() {
       setTabs([])
       setActivePath(null)
       setContents({})
+      setEditingPaths(new Set())
+      setUnsavedChanges(new Set())
       setError(null)
 
       const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
@@ -464,6 +522,18 @@ export default function App() {
         closeActiveTabRef.current()
         return
       }
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        if (activePath) toggleEditMode(activePath)
+        return
+      }
+      if (e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        if (activePath && unsavedChanges.has(activePath)) {
+          void saveFile(activePath)
+        }
+        return
+      }
       if (e.key === ',') {
         e.preventDefault()
         setSettingsOpen(true)
@@ -482,7 +552,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -772,17 +842,31 @@ export default function App() {
       </div>
 
       <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
-        <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
+        <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} unsavedPaths={unsavedChanges} editingPaths={editingPaths} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-hidden">
-            <MarkdownPreview
-              content={activePath ? contents[activePath] ?? '' : ''}
-              filePath={activePath}
-              contentWidth={contentWidth.value}
-              onOpenRelative={handleOpenRelative}
-              onFocus={handlePreviewFocus}
-              onAskAI={(text) => { setChatOpen(true); setChatDraft(text) }}
-            />
+          <div className="relative flex flex-1 flex-col overflow-hidden">
+            {activePath && editingPaths.has(activePath) ? (
+              <MarkdownEditor
+                key={activePath}
+                content={contents[activePath] ?? ''}
+                filePath={activePath}
+                contentWidth={contentWidth.value}
+                onChange={(value) => handleEditorChange(activePath, value)}
+                onSave={() => void saveFile(activePath)}
+                onToggleEdit={() => toggleEditMode(activePath)}
+              />
+            ) : (
+              <MarkdownPreview
+                content={activePath ? contents[activePath] ?? '' : ''}
+                filePath={activePath}
+                contentWidth={contentWidth.value}
+                onOpenRelative={handleOpenRelative}
+                onFocus={handlePreviewFocus}
+                onAskAI={(text) => { setChatOpen(true); setChatDraft(text) }}
+                onToggleEdit={activePath ? () => toggleEditMode(activePath) : undefined}
+                isEditing={false}
+              />
+            )}
           </div>
           <ChatPanel
             open={chatOpen}

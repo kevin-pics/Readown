@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
-import { readFile, readdir, stat } from 'fs/promises'
+import { readFile, readdir, stat, writeFile } from 'fs/promises'
 import { watch } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join, relative } from 'path'
@@ -311,6 +311,13 @@ ipcMain.handle(
     } catch {
       return false
     }
+  }
+)
+
+ipcMain.handle(
+  'write-file',
+  async (_event: IpcMainInvokeEvent, filePath: string, content: string): Promise<void> => {
+    await writeFile(filePath, content, 'utf-8')
   }
 )
 
