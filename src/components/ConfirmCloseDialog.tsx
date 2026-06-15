@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,17 @@ interface ConfirmCloseDialogProps {
 }
 
 export function ConfirmCloseDialog({ open, fileName, onSave, onDiscard, onCancel }: ConfirmCloseDialogProps) {
+  const saveRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      // Focus the Save button after the dialog opens
+      setTimeout(() => {
+        saveRef.current?.focus()
+      }, 0)
+    }
+  }, [open])
+
   const handleDiscard = useCallback(() => {
     onDiscard()
   }, [onDiscard])
@@ -34,7 +45,7 @@ export function ConfirmCloseDialog({ open, fileName, onSave, onDiscard, onCancel
         <DialogFooter className="flex-row gap-2 sm:gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
           <Button type="button" variant="destructive" onClick={handleDiscard}>Discard</Button>
-          <Button type="button" onClick={onSave}>Save</Button>
+          <Button type="button" ref={saveRef} onClick={onSave}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
