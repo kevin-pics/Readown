@@ -210,7 +210,7 @@ export default function App() {
   const [scale, setScale] = useState<ScaleOption>(() => getStoredScale())
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [chatWidth, setChatWidth] = useState(() => {
-    try { return Number(localStorage.getItem('readown.chatWidth')) || 380 } catch { return 380 }
+    try { return Number(localStorage.getItem('readown.chatWidth')) || 480 } catch { return 480 }
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
