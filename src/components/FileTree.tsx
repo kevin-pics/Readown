@@ -4,17 +4,26 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
-import { ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRight, FileText, Folder, FolderOpen, Pencil, Trash2 } from 'lucide-react'
+import { useCallback, useState } from 'react'
 
 interface FileTreeProps {
   nodes: FileNode[]
   selectedPath: string | null
   onSelect: (path: string) => void
+  onRename?: (node: FileNode) => void
+  onDelete?: (node: FileNode) => void
 }
 
-export function FileTree({ nodes, selectedPath, onSelect }: FileTreeProps) {
+export function FileTree({ nodes, selectedPath, onSelect, onRename, onDelete }: FileTreeProps) {
   return (
     <div className="select-none py-2">
       {nodes.map((node) => (
@@ -24,6 +33,8 @@ export function FileTree({ nodes, selectedPath, onSelect }: FileTreeProps) {
           selectedPath={selectedPath}
           onSelect={onSelect}
           depth={0}
+          onRename={onRename}
+          onDelete={onDelete}
         />
       ))}
     </div>
@@ -35,16 +46,26 @@ interface TreeNodeProps {
   selectedPath: string | null
   onSelect: (path: string) => void
   depth: number
+  onRename?: (node: FileNode) => void
+  onDelete?: (node: FileNode) => void
 }
 
-function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
+function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: TreeNodeProps) {
   const [open, setOpen] = useState(false)
   const INDENT = 16
   const folderPad = depth * INDENT + 8
   const filePad = folderPad + 20
 
+  const handleRename = useCallback(() => {
+    if (onRename) setTimeout(() => onRename(node), 0)
+  }, [onRename, node])
+
+  const handleDelete = useCallback(() => {
+    if (onDelete) setTimeout(() => onDelete(node), 0)
+  }, [onDelete, node])
+
   if (node.type === 'file') {
-    return (
+    const fileButton = (
       <button
         onClick={() => onSelect(node.path)}
         className={cn(
@@ -66,29 +87,87 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
         <span className="truncate">{node.name}</span>
       </button>
     )
+
+    if (!onRename && !onDelete) {
+      return fileButton
+    }
+
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          {fileButton}
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {onRename && (
+            <ContextMenuItem onClick={handleRename}>
+              <Pencil className="mr-2 h-3.5 w-3.5" />
+              Rename
+            </ContextMenuItem>
+          )}
+          {onRename && onDelete && <ContextMenuSeparator />}
+          {onDelete && (
+            <ContextMenuItem destructive onClick={handleDelete}>
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+    )
   }
+
+  const folderButton = (
+    <button
+      className="group flex w-full items-center gap-1.5 py-1 pr-2 text-sm font-medium text-foreground/90 transition-colors hover:bg-accent/60 hover:text-foreground"
+      style={{ paddingLeft: `${folderPad}px` }}
+    >
+      <ChevronRight
+        className={cn(
+          'h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground',
+          open && 'rotate-90'
+        )}
+      />
+      {open ? (
+        <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
+      ) : (
+        <Folder className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
+      )}
+      <span className="truncate">{node.name}</span>
+    </button>
+  )
+
+  const contextMenuItems = onRename || onDelete
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          className="group flex w-full items-center gap-1.5 py-1 pr-2 text-sm font-medium text-foreground/90 transition-colors hover:bg-accent/60 hover:text-foreground"
-          style={{ paddingLeft: `${folderPad}px` }}
-        >
-          <ChevronRight
-            className={cn(
-              'h-3.5 w-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground',
-              open && 'rotate-90'
+      {contextMenuItems ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <CollapsibleTrigger asChild>
+              {folderButton}
+            </CollapsibleTrigger>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            {onRename && (
+              <ContextMenuItem onClick={() => onRename(node)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Rename
+              </ContextMenuItem>
             )}
-          />
-          {open ? (
-            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
-          ) : (
-            <Folder className="h-4 w-4 shrink-0 text-muted-foreground transition-colors" />
-          )}
-          <span className="truncate">{node.name}</span>
-        </button>
-      </CollapsibleTrigger>
+            {onRename && onDelete && <ContextMenuSeparator />}
+            {onDelete && (
+              <ContextMenuItem destructive onClick={() => onDelete(node)}>
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </ContextMenuItem>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        <CollapsibleTrigger asChild>
+          {folderButton}
+        </CollapsibleTrigger>
+      )}
       <CollapsibleContent>
         <div>
           {node.children!.map((child: FileNode) => (
@@ -98,6 +177,8 @@ function TreeNode({ node, selectedPath, onSelect, depth }: TreeNodeProps) {
               selectedPath={selectedPath}
               onSelect={onSelect}
               depth={depth + 1}
+              onRename={onRename}
+              onDelete={onDelete}
             />
           ))}
         </div>

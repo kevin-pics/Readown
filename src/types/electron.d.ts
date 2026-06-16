@@ -20,6 +20,8 @@ export interface ReadownAPI {
   watchDirectory: (dirPath: string | null) => Promise<void>
   getPathForFile: (file: File) => string
   writeFile: (filePath: string, content: string) => Promise<void>
+  renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
+  deletePath: (targetPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
 declare global {

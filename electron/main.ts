@@ -1,9 +1,9 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
-import { readFile, readdir, stat, writeFile } from 'fs/promises'
+import { readFile, readdir, stat, writeFile, rename, rm } from 'fs/promises'
 import { watch } from 'fs'
 import { fileURLToPath } from 'url'
-import { dirname, join, relative } from 'path'
+import { dirname, join, relative, basename } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -318,6 +318,37 @@ ipcMain.handle(
   'write-file',
   async (_event: IpcMainInvokeEvent, filePath: string, content: string): Promise<void> => {
     await writeFile(filePath, content, 'utf-8')
+  }
+)
+
+ipcMain.handle(
+  'rename-path',
+  async (_event: IpcMainInvokeEvent, oldPath: string, newName: string): Promise<{ success: boolean; newPath?: string; error?: string }> => {
+    try {
+      const parentDir = dirname(oldPath)
+      const newPath = join(parentDir, newName)
+      await rename(oldPath, newPath)
+      return { success: true, newPath }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  }
+)
+
+ipcMain.handle(
+  'delete-path',
+  async (_event: IpcMainInvokeEvent, targetPath: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const info = await stat(targetPath)
+      if (info.isDirectory()) {
+        await rm(targetPath, { recursive: true, force: true })
+      } else {
+        await rm(targetPath, { force: true })
+      }
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
   }
 )
 

@@ -8,6 +8,8 @@ import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ConfirmCloseDialog } from '@/components/ConfirmCloseDialog'
 import { SaveDialog } from '@/components/SaveDialog'
+import { RenameDialog } from '@/components/RenameDialog'
+import { DeleteDialog } from '@/components/DeleteDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
@@ -19,6 +21,8 @@ interface DirectoryAPI {
   loadDirectory: (source: string | FileSystemDirectoryHandle) => Promise<FileNode[]>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<void>
+  renamePath?: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
+  deletePath?: (targetPath: string) => Promise<{ success: boolean; error?: string }>
   onDragDrop: (callback: (source: string | FileSystemDirectoryHandle) => void) => () => void
   onDirectoryChange?: (callback: (dirPath: string) => void) => () => void
   watchDirectory?: (dirPath: string | null) => Promise<void>
@@ -35,6 +39,8 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
     },
     readFile: (path) => electronAPI.readFile(path),
     writeFile: (path, content) => electronAPI.writeFile(path, content),
+    renamePath: electronAPI.renamePath ? (oldPath, newName) => electronAPI.renamePath!(oldPath, newName) : undefined,
+    deletePath: electronAPI.deletePath ? (targetPath) => electronAPI.deletePath!(targetPath) : undefined,
     onDragDrop: (callback) =>
       electronAPI.onDragDrop((dirPath) => callback(dirPath)),
     onDirectoryChange: (callback) =>
@@ -229,11 +235,11 @@ export default function App() {
   const [dirPath, setDirPath] = useState<string | null>(null)
   const [tabs, setTabs] = useState<string[]>([])
   const tabsRef = useRef(tabs)
-  tabsRef.current = tabs
   const [activePath, setActivePath] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
   const contentsRef = useRef(contents)
-  contentsRef.current = contents
+  useEffect(() => { tabsRef.current = tabs }, [tabs])
+  useEffect(() => { contentsRef.current = contents }, [contents])
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
   const [editingPaths, setEditingPaths] = useState<Set<string>>(new Set())
@@ -256,6 +262,8 @@ export default function App() {
   const [openingDir, _setOpeningDir] = useState(false)
   const [saveDialogPath, setSaveDialogPath] = useState<string | null>(null)
   const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null)
+  const [renameNode, setRenameNode] = useState<FileNode | null>(null)
+  const [deleteNode, setDeleteNode] = useState<FileNode | null>(null)
 
   useEffect(() => {
     applyTheme(theme)
@@ -446,6 +454,94 @@ export default function App() {
     },
     [tabs, activePath, setActivePathAndCheckModified]
   )
+
+  const handleRename = useCallback(async (newName: string) => {
+    const node = renameNode
+    if (!node || !api.renamePath) return
+    setRenameNode(null)
+    const result = await api.renamePath(node.path, newName)
+    if (!result.success) {
+      setError(`Failed to rename: ${result.error}`)
+      return
+    }
+    if (dirPath) {
+      try {
+        const nodes = await api.loadDirectory(dirPath)
+        setTree(nodes)
+      } catch {
+        // ignore reload errors
+      }
+    }
+    if (node.type === 'directory') {
+      const oldPrefix = node.path + '/'
+      const newPrefix = result.newPath! + '/'
+      setTabs((prev) => prev.map((p) => p.startsWith(oldPrefix) ? newPrefix + p.slice(oldPrefix.length) : p))
+      setContents((prev) => {
+        const next: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          next[key.startsWith(oldPrefix) ? newPrefix + key.slice(oldPrefix.length) : key] = prev[key]
+        }
+        return next
+      })
+      setSnapshots((prev) => {
+        const next: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          next[key.startsWith(oldPrefix) ? newPrefix + key.slice(oldPrefix.length) : key] = prev[key]
+        }
+        return next
+      })
+      setActivePath((prev) => prev && prev.startsWith(oldPrefix) ? newPrefix + prev.slice(oldPrefix.length) : prev)
+    } else {
+      const oldPath = node.path
+      const newPath = result.newPath!
+      setTabs((prev) => prev.map((p) => p === oldPath ? newPath : p))
+      setContents((prev) => {
+        const next: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          next[key === oldPath ? newPath : key] = prev[key]
+        }
+        return next
+      })
+      setSnapshots((prev) => {
+        const next: Record<string, string> = {}
+        for (const key of Object.keys(prev)) {
+          next[key === oldPath ? newPath : key] = prev[key]
+        }
+        return next
+      })
+      setActivePath((prev) => prev === oldPath ? newPath : prev)
+    }
+  }, [renameNode, api, dirPath])
+
+  const handleDelete = useCallback(async () => {
+    const node = deleteNode
+    if (!node || !api.deletePath) return
+    setDeleteNode(null)
+    const result = await api.deletePath(node.path)
+    if (!result.success) {
+      setError(`Failed to delete: ${result.error}`)
+      return
+    }
+    if (node.type === 'directory') {
+      const deletedPrefix = node.path + '/'
+      const tabsToClose = tabsRef.current.filter((p) => p.startsWith(deletedPrefix))
+      for (const p of tabsToClose) {
+        forceCloseTab(p)
+      }
+    } else {
+      if (tabsRef.current.includes(node.path)) {
+        forceCloseTab(node.path)
+      }
+    }
+    if (dirPath) {
+      try {
+        const nodes = await api.loadDirectory(dirPath)
+        setTree(nodes)
+      } catch {
+        // ignore reload errors
+      }
+    }
+  }, [deleteNode, api, dirPath, forceCloseTab])
 
   const closeTab = useCallback(
     (path: string) => {
@@ -975,7 +1071,7 @@ export default function App() {
 
         <ScrollArea className="flex-1">
           {!isEmpty ? (
-            <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} />
+            <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} onRename={api.renamePath ? (node) => setRenameNode(node) : undefined} onDelete={api.deletePath ? (node) => setDeleteNode(node) : undefined} />
           ) : (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
@@ -1088,6 +1184,22 @@ export default function App() {
         fileExists={(name) => !!(dirPath && fileExistsInTree(tree, `${dirPath}/${name}`))}
         onSave={handleSaveAs}
         onCancel={() => setSaveDialogPath(null)}
+      />
+
+      <RenameDialog
+        open={renameNode !== null}
+        currentName={renameNode?.name ?? ''}
+        isFile={renameNode?.type === 'file'}
+        onRename={handleRename}
+        onCancel={() => setRenameNode(null)}
+      />
+
+      <DeleteDialog
+        open={deleteNode !== null}
+        itemName={deleteNode?.name ?? ''}
+        isDirectory={deleteNode?.type === 'directory'}
+        onDelete={handleDelete}
+        onCancel={() => setDeleteNode(null)}
       />
 
     </div>

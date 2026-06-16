@@ -22,6 +22,8 @@ export interface ReadownAPI {
   watchDirectory: (dirPath: string | null) => Promise<void>
   getPathForFile: (file: File) => string
   writeFile: (filePath: string, content: string) => Promise<void>
+  renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
+  deletePath: (targetPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
 function onChannel(channel: string, callback: () => void) {
@@ -52,6 +54,8 @@ const api: ReadownAPI = {
   watchDirectory: (dirPath: string | null) => ipcRenderer.invoke('watch-directory', dirPath),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write-file', filePath, content),
+  renamePath: (oldPath: string, newName: string) => ipcRenderer.invoke('rename-path', oldPath, newName),
+  deletePath: (targetPath: string) => ipcRenderer.invoke('delete-path', targetPath),
 }
 
 contextBridge.exposeInMainWorld('readownAPI', api)
