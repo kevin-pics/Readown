@@ -143,20 +143,22 @@ function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: T
       {contextMenuItems ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <CollapsibleTrigger asChild>
-              {folderButton}
-            </CollapsibleTrigger>
+            <div>
+              <CollapsibleTrigger asChild>
+                {folderButton}
+              </CollapsibleTrigger>
+            </div>
           </ContextMenuTrigger>
           <ContextMenuContent>
             {onRename && (
-              <ContextMenuItem onClick={() => onRename(node)}>
+              <ContextMenuItem onClick={handleRename}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Rename
               </ContextMenuItem>
             )}
             {onRename && onDelete && <ContextMenuSeparator />}
             {onDelete && (
-              <ContextMenuItem destructive onClick={() => onDelete(node)}>
+              <ContextMenuItem destructive onClick={handleDelete}>
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
                 Delete
               </ContextMenuItem>

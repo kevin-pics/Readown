@@ -79,7 +79,7 @@ function RenameDialogInner({ currentName, isFile, onRename, onCancel }: Omit<Ren
 export function RenameDialog({ open, currentName, isFile, onRename, onCancel }: RenameDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel() }}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[400px]" onCloseAutoFocus={(e) => e.preventDefault()}>
         {open && <RenameDialogInner key={currentName} currentName={currentName} isFile={isFile} onRename={onRename} onCancel={onCancel} />}
       </DialogContent>
     </Dialog>

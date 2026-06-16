@@ -30,7 +30,7 @@ export function DeleteDialog({ open, itemName, isDirectory, onDelete, onCancel }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel() }}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[400px]" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Delete {isDirectory ? 'Folder' : 'File'}</DialogTitle>
           <DialogDescription>
