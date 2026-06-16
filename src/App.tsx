@@ -228,8 +228,12 @@ export default function App() {
   const [tree, setTree] = useState<FileNode[]>([])
   const [dirPath, setDirPath] = useState<string | null>(null)
   const [tabs, setTabs] = useState<string[]>([])
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
   const [activePath, setActivePath] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
+  const contentsRef = useRef(contents)
+  contentsRef.current = contents
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
   const [editingPaths, setEditingPaths] = useState<Set<string>>(new Set())
@@ -562,11 +566,25 @@ export default function App() {
       }
       setTree(nodes)
       setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
-      setTabs([])
-      setActivePath(null)
-      setContents({})
-      setEditingPaths(new Set())
-      setUnsavedChanges(new Set())
+      const untitledTabs = tabsRef.current.filter((p) => isUntitledPath(p))
+      const untitledContents: Record<string, string> = {}
+      for (const p of untitledTabs) {
+        const c = contentsRef.current[p]
+        if (c !== undefined) untitledContents[p] = c
+      }
+      setTabs(untitledTabs)
+      setActivePath(untitledTabs.length > 0 ? untitledTabs[untitledTabs.length - 1] : null)
+      setContents(untitledContents)
+      setEditingPaths((prev) => {
+        const next = new Set<string>()
+        for (const p of untitledTabs) { if (prev.has(p)) next.add(p) }
+        return next
+      })
+      setUnsavedChanges((prev) => {
+        const next = new Set<string>()
+        for (const p of untitledTabs) { if (prev.has(p)) next.add(p) }
+        return next
+      })
       setError(null)
 
       const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
@@ -734,9 +752,25 @@ export default function App() {
               : source.name) ??
             'Directory'
         )
-        setTabs([])
-        setActivePath(null)
-        setContents({})
+        const untitledTabs = tabsRef.current.filter((p) => isUntitledPath(p))
+        const untitledContents: Record<string, string> = {}
+        for (const p of untitledTabs) {
+          const c = contentsRef.current[p]
+          if (c !== undefined) untitledContents[p] = c
+        }
+        setTabs(untitledTabs)
+        setActivePath(untitledTabs.length > 0 ? untitledTabs[untitledTabs.length - 1] : null)
+        setContents(untitledContents)
+        setEditingPaths((prev) => {
+          const next = new Set<string>()
+          for (const p of untitledTabs) { if (prev.has(p)) next.add(p) }
+          return next
+        })
+        setUnsavedChanges((prev) => {
+          const next = new Set<string>()
+          for (const p of untitledTabs) { if (prev.has(p)) next.add(p) }
+          return next
+        })
         if (typeof source === 'string' && api.watchDirectory) {
           void api.watchDirectory(source)
         }
