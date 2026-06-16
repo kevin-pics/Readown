@@ -1,9 +1,9 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir, stat, writeFile, rename, rm } from 'fs/promises'
 import { watch } from 'fs'
 import { fileURLToPath } from 'url'
-import { dirname, join, relative, basename } from 'path'
+import { dirname, join, relative } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
