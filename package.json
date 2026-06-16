@@ -24,7 +24,10 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
-      "identity": null,
+      "identity": "-",
+      "gatekeeperAssess": false,
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
       "fileAssociations": [
         {
           "ext": "md",

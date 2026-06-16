@@ -13,7 +13,7 @@ const isDev = !app.isPackaged
 const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
-  app.quit()
+  app.exit(0)
 }
 
 function createWindow(openFilePath?: string): BrowserWindow {
