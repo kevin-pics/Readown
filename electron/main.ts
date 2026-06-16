@@ -10,7 +10,13 @@ const __dirname = dirname(__filename)
 
 const isDev = !app.isPackaged
 
-function createWindow(): BrowserWindow {
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+}
+
+function createWindow(openFilePath?: string): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -26,9 +32,13 @@ function createWindow(): BrowserWindow {
   })
 
   if (isDev) {
-    win.loadURL('http://localhost:3000')
+    const url = new URL('http://localhost:3000')
+    if (openFilePath) url.searchParams.set('openFile', openFilePath)
+    win.loadURL(url.toString())
   } else {
-    win.loadFile(join(__dirname, '../../dist/index.html'))
+    const opts: Electron.LoadFileOptions = {}
+    if (openFilePath) opts.query = { openFile: openFilePath }
+    win.loadFile(join(__dirname, '../../dist/index.html'), opts)
       .catch((err) => {
         console.error('Failed to load index.html:', err)
         dialog.showErrorBox('Load Error', `Failed to load app: ${err.message}`)
@@ -142,20 +152,40 @@ function setupMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+const pendingOpenFiles: string[] = []
+
+app.on('open-file', (_event, path) => {
+  if (!app.isReady()) {
+    pendingOpenFiles.push(path)
+    return
+  }
+  createWindow(path)
+})
+
+app.on('second-instance', () => {
+  const wins = BrowserWindow.getAllWindows()
+  if (wins.length > 0) {
+    const win = wins[0]
+    if (win.isMinimized()) win.restore()
+    if (!win.isVisible()) win.show()
+    win.focus()
+  }
+})
+
 app.whenReady().then(() => {
   setupMenu()
-  createWindow()
+
+  if (pendingOpenFiles.length > 0) {
+    for (const filePath of pendingOpenFiles) {
+      createWindow(filePath)
+    }
+    pendingOpenFiles.length = 0
+  } else {
+    createWindow()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-
-  app.on('open-file', (_event, path) => {
-    const wins = BrowserWindow.getAllWindows()
-    const win = BrowserWindow.getFocusedWindow() ?? wins[0]
-    if (win && path) {
-      win.webContents.send('drag-drop-directory', path)
-    }
   })
 })
 

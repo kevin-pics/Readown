@@ -24,7 +24,21 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
-      "identity": null
+      "identity": null,
+      "fileAssociations": [
+        {
+          "ext": "md",
+          "name": "Markdown Document",
+          "role": "Viewer",
+          "mimeType": "text/markdown"
+        },
+        {
+          "ext": "markdown",
+          "name": "Markdown Document",
+          "role": "Viewer",
+          "mimeType": "text/markdown"
+        }
+      ]
     }
   },
   "description": "A modern Markdown directory reader",

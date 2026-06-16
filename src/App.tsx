@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
-  loadDirectory: (source: string | FileSystemDirectoryHandle) => Promise<FileNode[]>
+  loadDirectory: (source: string | FileSystemDirectoryHandle, selectPath?: string) => Promise<FileNode[]>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<void>
   renamePath?: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
@@ -891,6 +891,30 @@ export default function App() {
     })
     return () => unsubscribe()
   }, [api, loadDirectory])
+
+  useEffect(() => {
+    if (!window.readownAPI) return
+    const params = new URLSearchParams(window.location.search)
+    const openFile = params.get('openFile')
+    if (openFile) {
+      window.history.replaceState({}, '', window.location.pathname)
+      void (async () => {
+        try {
+          const isDir = await window.readownAPI.isDirectory(openFile)
+          if (isDir) {
+            loadDirectory(openFile)
+          } else if (openFile.toLowerCase().endsWith('.md')) {
+            const parentDir = openFile.substring(0, Math.max(openFile.lastIndexOf('/'), openFile.lastIndexOf('\\')))
+            if (parentDir) {
+              loadDirectory(parentDir, openFile)
+            }
+          }
+        } catch (err) {
+          setError((err as Error).message)
+        }
+      })()
+    }
+  }, [loadDirectory])
 
   useEffect(() => {
     if (!api.onDirectoryChange) return
