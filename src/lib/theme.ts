@@ -41,7 +41,7 @@ export const themes: Theme[] = [
     prose: {
       '--prose-text': '#37352f',
       '--prose-heading': '#37352f',
-      '--prose-link': '#353470',
+      '--prose-link': '#71498b',
       '--prose-code-bg': '#e9e9e5',
       '--prose-blockquote': '#6b6b6b',
       '--prose-table-border': '#d9d8d5',

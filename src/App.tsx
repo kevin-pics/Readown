@@ -280,6 +280,12 @@ export default function App() {
     try { localStorage.setItem('readown.chatOpen', String(chatOpen)) } catch { /* ignore */ }
   }, [chatOpen])
 
+  useEffect(() => {
+    applyTheme(theme)
+    applyFont(font)
+    applyScale(scale)
+  }, [])
+
   const handleFontChange = useCallback((newFont: FontOption) => {
     setFont(newFont)
     applyFont(newFont)
