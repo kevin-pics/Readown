@@ -258,7 +258,9 @@ export default function App() {
     try { return Number(localStorage.getItem('readown.chatWidth')) || 480 } catch { return 480 }
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(() => {
+    try { return localStorage.getItem('readown.chatOpen') !== 'false' } catch { return false }
+  })
   const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [chatModels, setChatModels] = useState<ChatModel[]>(() => getStoredChatModels())
   const [openingDir, _setOpeningDir] = useState(false)
@@ -272,6 +274,10 @@ export default function App() {
     applyFont(font)
     applyScale(scale)
   }, [theme, font, scale])
+
+  useEffect(() => {
+    try { localStorage.setItem('readown.chatOpen', String(chatOpen)) } catch { /* ignore */ }
+  }, [chatOpen])
 
   const handleFontChange = useCallback((newFont: FontOption) => {
     setFont(newFont)
