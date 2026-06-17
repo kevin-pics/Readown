@@ -25,6 +25,7 @@ export interface ReadownAPI {
   writeFile: (filePath: string, content: string) => Promise<void>
   renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
   deletePath: (targetPath: string) => Promise<{ success: boolean; error?: string }>
+  openLocalLink: (filePath: string) => Promise<void>
 }
 
 function onChannel(channel: string, callback: () => void) {
@@ -58,6 +59,7 @@ const api: ReadownAPI = {
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write-file', filePath, content),
   renamePath: (oldPath: string, newName: string) => ipcRenderer.invoke('rename-path', oldPath, newName),
   deletePath: (targetPath: string) => ipcRenderer.invoke('delete-path', targetPath),
+  openLocalLink: (filePath: string) => ipcRenderer.invoke('open-local-link', filePath),
 }
 
 contextBridge.exposeInMainWorld('readownAPI', api)

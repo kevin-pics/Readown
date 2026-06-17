@@ -643,7 +643,13 @@ export default function App() {
     (href: string) => {
       if (!activePath) return
       const resolved = resolveRelativePath(activePath, href)
-      if (resolved) openFile(resolved)
+      if (!resolved) return
+      const lowerExt = resolved.toLowerCase()
+      if (lowerExt.endsWith('.md') || lowerExt.endsWith('.markdown') || lowerExt.endsWith('.mdx')) {
+        openFile(resolved)
+      } else {
+        window.readownAPI?.openLocalLink(resolved)
+      }
     },
     [activePath, openFile]
   )

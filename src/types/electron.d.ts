@@ -23,6 +23,7 @@ export interface ReadownAPI {
   writeFile: (filePath: string, content: string) => Promise<void>
   renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
   deletePath: (targetPath: string) => Promise<{ success: boolean; error?: string }>
+  openLocalLink: (filePath: string) => Promise<void>
 }
 
 declare global {

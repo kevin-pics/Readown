@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir, stat, writeFile, rename, rm } from 'fs/promises'
 import { watch } from 'fs'
@@ -56,7 +56,7 @@ function createWindow(openFilePath?: string): BrowserWindow {
   win.webContents.on('will-navigate', (e, url) => {
     if (url !== win.webContents.getURL()) {
       e.preventDefault()
-      import('electron').then(({ shell }) => shell.openExternal(url))
+      shell.openExternal(url)
     }
   })
 
@@ -406,6 +406,13 @@ ipcMain.handle(
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
+  }
+)
+
+ipcMain.handle(
+  'open-local-link',
+  async (_event: IpcMainInvokeEvent, filePath: string): Promise<void> => {
+    await shell.openPath(filePath)
   }
 )
 
