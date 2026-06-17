@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
-import { CHAT_MODELS, type ChatMessage, generateSearchQuery, getStoredChatModel, getStoredThinkingLevel, getStoredWebSearch, streamChat, storeChatModel, storeThinkingLevel, storeWebSearch, webSearch } from '@/lib/chat'
+import { CHAT_MODELS, DEFAULT_MODEL, type ChatMessage, generateSearchQuery, getStoredChatModel, getStoredThinkingLevel, getStoredWebSearch, streamChat, storeChatModel, storeThinkingLevel, storeWebSearch, webSearch, type ChatModel } from '@/lib/chat'
 import { ArrowUp, Bot, ChevronDown, Copy, FileText, Globe, MessageSquarePlus, RefreshCw, Square, X } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
@@ -15,6 +15,7 @@ interface ChatPanelProps {
   onResize: (width: number) => void
   draftInput?: string | null
   onDraftConsumed?: () => void
+  models?: ChatModel[]
 }
 
 const SYSTEM_PROMPT_MAX = 8000
@@ -32,7 +33,8 @@ function buildSystemPrompt(filePath: string | null, fileContent: string): string
   return prompt
 }
 
-export function ChatPanel({ open, onClose, filePath, fileContent, width, onResize, draftInput, onDraftConsumed }: ChatPanelProps) {
+export function ChatPanel({ open, onClose, filePath, fileContent, width, onResize, draftInput, onDraftConsumed, models }: ChatPanelProps) {
+  const modelsList = models ?? CHAT_MODELS
   const [sessions, setSessions] = useState<Record<string, ChatMessage[]>>({})
   const [input, setInput] = useState('')
   const [model, setModel] = useState(() => getStoredChatModel())
@@ -45,6 +47,18 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
   const shouldAutoScroll = useRef(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const composingRef = useRef(false)
+
+  // Keep the selected model valid for the current model list.
+  useEffect(() => {
+    if (modelsList.length === 0) return
+    if (!modelsList.some((m) => m.id === model)) {
+      const next = DEFAULT_MODEL && modelsList.some((m) => m.id === DEFAULT_MODEL)
+        ? DEFAULT_MODEL
+        : modelsList[0].id
+      setModel(next)
+      storeChatModel(next)
+    }
+  }, [modelsList, model])
 
   const sessionKey = filePath ?? '__no_file__'
   const messages = useMemo(() => sessions[sessionKey] ?? [], [sessions, sessionKey])
@@ -475,7 +489,7 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
                 onChange={handleModelChange}
                 className="flex h-6 items-center rounded border bg-background px-1.5 pr-5 text-[11px] leading-none text-foreground appearance-none cursor-pointer box-border"
               >
-                {CHAT_MODELS.map((m) => (
+                {modelsList.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

@@ -15,12 +15,65 @@ export interface ChatModel {
 }
 
 export const CHAT_MODELS: ChatModel[] = [
+  { id: 'glm-5.2:cloud', name: 'glm-5.2:cloud' },
   { id: 'glm-5.1:cloud', name: 'glm-5.1:cloud' },
   { id: 'kimi-k2.6:cloud', name: 'kimi-k2.6:cloud' },
   { id: 'gemma4:31b-cloud', name: 'gemma4:31b-cloud' },
 ]
 
-export const DEFAULT_MODEL = 'glm-5.1:cloud'
+export const DEFAULT_MODEL = 'glm-5.2:cloud'
+
+const CUSTOM_MODELS_KEY = 'readown.customModels'
+
+export function getStoredChatModels(): ChatModel[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_MODELS_KEY)
+    if (!raw) return CHAT_MODELS
+    const parsed = JSON.parse(raw) as ChatModel[]
+    if (!Array.isArray(parsed) || parsed.length === 0) return CHAT_MODELS
+    return parsed
+  } catch {
+    return CHAT_MODELS
+  }
+}
+
+export function storeChatModels(models: ChatModel[]): void {
+  try {
+    localStorage.setItem(CUSTOM_MODELS_KEY, JSON.stringify(models))
+  } catch {
+    // ignore
+  }
+}
+
+export function addChatModel(id: string): ChatModel[] {
+  const trimmed = id.trim()
+  if (!trimmed) return getStoredChatModels()
+  const current = getStoredChatModels()
+  if (current.some((m) => m.id === trimmed)) return current
+  const next = [...current, { id: trimmed, name: trimmed }]
+  storeChatModels(next)
+  return next
+}
+
+export function removeChatModel(id: string): ChatModel[] {
+  const current = getStoredChatModels()
+  const next = current.filter((m) => m.id !== id)
+  if (next.length === 0) return current
+  storeChatModels(next)
+  return next
+}
+
+export function moveChatModel(fromId: string, toId: string): ChatModel[] {
+  const current = getStoredChatModels()
+  const fromIdx = current.findIndex((m) => m.id === fromId)
+  const toIdx = current.findIndex((m) => m.id === toId)
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return current
+  const next = [...current]
+  const [moved] = next.splice(fromIdx, 1)
+  next.splice(toIdx, 0, moved)
+  storeChatModels(next)
+  return next
+}
 
 const OLLAMA_BASE_URL = 'http://localhost:11434'
 

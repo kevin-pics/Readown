@@ -15,6 +15,7 @@ import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
+import { getStoredChatModels, type ChatModel } from '@/lib/chat'
 
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
@@ -259,6 +260,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatDraft, setChatDraft] = useState<string | null>(null)
+  const [chatModels, setChatModels] = useState<ChatModel[]>(() => getStoredChatModels())
   const [openingDir, _setOpeningDir] = useState(false)
   const [saveDialogPath, setSaveDialogPath] = useState<string | null>(null)
   const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null)
@@ -1164,6 +1166,7 @@ export default function App() {
             }}
             draftInput={chatDraft}
             onDraftConsumed={() => setChatDraft(null)}
+            models={chatModels}
           />
         </div>
       </main>
@@ -1179,6 +1182,8 @@ export default function App() {
         onWidthChange={handleWidthChange}
         currentScale={scale}
         onScaleChange={handleScaleChange}
+        models={chatModels}
+        onModelsChange={setChatModels}
       />
 
       <ConfirmCloseDialog

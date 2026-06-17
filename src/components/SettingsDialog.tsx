@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { fontOptions, type FontOption, type ScaleOption, scaleOptions, type WidthOption, widthOptions, themes, type Theme } from '@/lib/theme'
-import { getStoredOllamaApiKey, storeOllamaApiKey } from '@/lib/chat'
+import { addChatModel, getStoredOllamaApiKey, moveChatModel, removeChatModel, storeOllamaApiKey, type ChatModel } from '@/lib/chat'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { GripVertical, Plus, Trash2 } from 'lucide-react'
 
 interface SettingsDialogProps {
   open: boolean
@@ -20,6 +24,8 @@ interface SettingsDialogProps {
   onWidthChange: (width: WidthOption) => void
   currentScale: ScaleOption
   onScaleChange: (scale: ScaleOption) => void
+  models: ChatModel[]
+  onModelsChange: (models: ChatModel[]) => void
 }
 
 const TABS = [
@@ -40,9 +46,33 @@ export function SettingsDialog({
   onWidthChange,
   currentScale,
   onScaleChange,
+  models,
+  onModelsChange,
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('appearance')
   const [previewThemeId, setPreviewThemeId] = useState(currentTheme.id)
+  const [newModelId, setNewModelId] = useState('')
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Find which chip the pointer is inside. We hit-test by pointer-in-rect
+  // (not by dragover on the chip itself, which fires inconsistently). Since
+  // chips never move during the drag, geometry stays stable and there is no
+  // jitter.
+  const computeOverId = useCallback((clientX: number, clientY: number): string | null => {
+    const container = containerRef.current
+    if (!container) return null
+    const children = Array.from(container.children) as HTMLElement[]
+    for (const child of children) {
+      const rect = child.getBoundingClientRect()
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        return child.dataset.modelId ?? null
+      }
+    }
+    return null
+  }, [])
+  const [pendingDelete, setPendingDelete] = useState<ChatModel | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -61,6 +91,7 @@ export function SettingsDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl h-[520px] grid grid-rows-[auto_1fr] overflow-hidden">
         <DialogHeader>
@@ -184,22 +215,126 @@ export function SettingsDialog({
             )}
 
             {activeTab === 'chat' && (
-              <div>
-                <label className="mb-2 block text-sm font-medium">Ollama API Key</label>
-                <input
-                  type="password"
-                  tabIndex={-1}
-                  placeholder="Leave empty for local Ollama"
-                  defaultValue={getStoredOllamaApiKey()}
-                  onChange={(e) => storeOllamaApiKey(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-0"
-                />
-                <p className="mt-1.5 text-xs text-muted-foreground">Used for cloud models and web search. Stored locally on your device.</p>
+              <div className="space-y-6">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Ollama API Key</label>
+                  <input
+                    type="password"
+                    tabIndex={-1}
+                    placeholder="Leave empty for local Ollama"
+                    defaultValue={getStoredOllamaApiKey()}
+                    onChange={(e) => storeOllamaApiKey(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-0"
+                  />
+                  <p className="mt-1.5 text-xs text-muted-foreground">Used for cloud models and web search. Stored locally on your device.</p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Models</label>
+                  <div
+                    ref={containerRef}
+                    className="flex flex-wrap gap-1.5"
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      if (!dragId) return
+                      setOverId(computeOverId(e.clientX, e.clientY))
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (dragId && overId && dragId !== overId) onModelsChange(moveChatModel(dragId, overId))
+                      setDragId(null)
+                      setOverId(null)
+                    }}
+                  >
+                    {models.map((m) => (
+                      <span
+                        key={m.id}
+                        data-model-id={m.id}
+                        draggable
+                        onDragStart={() => { setDragId(m.id); setOverId(null) }}
+                        onDragEnd={() => { setDragId(null); setOverId(null) }}
+                        className={cn(
+                          'group inline-flex items-center gap-1 rounded-full border border-border bg-background py-1 pl-1.5 pr-2 text-xs transition-colors',
+                          dragId === m.id && 'opacity-40',
+                          overId === m.id && dragId !== m.id && 'border-primary bg-primary/10 ring-1 ring-primary'
+                        )}
+                      >
+                        <GripVertical className="h-3 w-3 cursor-grab text-muted-foreground" />
+                        <span className="truncate max-w-[140px]">{m.name}</span>
+                        <button
+                          onClick={() => setPendingDelete(m)}
+                          disabled={models.length <= 1}
+                          className="ml-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                          title="Remove model"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      tabIndex={-1}
+                      placeholder="Model id, e.g. llama3.2:latest"
+                      value={newModelId}
+                      onChange={(e) => setNewModelId(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const id = newModelId.trim()
+                          if (!id) return
+                          onModelsChange(addChatModel(id))
+                          setNewModelId('')
+                        }
+                      }}
+                      className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-0"
+                    />
+                    <button
+                      onClick={() => {
+                        const id = newModelId.trim()
+                        if (!id) return
+                        onModelsChange(addChatModel(id))
+                        setNewModelId('')
+                      }}
+                      className="flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm hover:bg-accent"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">Drag tags to reorder. Click the trash icon to remove.</p>
+                </div>
               </div>
             )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={pendingDelete !== null} onOpenChange={(v) => { if (!v) setPendingDelete(null) }}>
+      <DialogContent className="sm:max-w-[400px]" onCloseAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>Remove Model</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to remove "{pendingDelete?.name}" from the model list? This only removes it from the selector and does not uninstall anything.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-row gap-2 sm:gap-2">
+          <Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              if (pendingDelete) onModelsChange(removeChatModel(pendingDelete.id))
+              setPendingDelete(null)
+            }}
+          >
+            Remove
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
