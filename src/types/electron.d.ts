@@ -14,6 +14,7 @@ export interface ReadownAPI {
   onCloseTab: (callback: () => void) => () => void
   onOpenDirectory: (callback: () => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
+  onFindInPage: (callback: () => void) => () => void
   onDirectoryChange: (callback: (dirPath: string) => void) => () => void
   closeWindow: () => void
   isDirectory: (filePath: string) => Promise<boolean>
