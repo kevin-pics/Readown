@@ -243,6 +243,27 @@
 .prose-chat h2 { font-size: 1rem; }
 .prose-chat h3 { font-size: 0.9375rem; }
 
+/* Search highlight */
+mark.search-highlight {
+  background-color: hsl(50 100% 50% / 0.45) !important;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.dark mark.search-highlight {
+  background-color: hsl(50 100% 50% / 0.35) !important;
+}
+mark.search-highlight-active {
+  background-color: hsl(50 100% 50% / 0.85) !important;
+  color: hsl(0 0% 0%) !important;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.dark mark.search-highlight-active {
+  background-color: hsl(50 100% 50% / 0.9) !important;
+  color: hsl(0 0% 0%) !important;
+}
+
 /* Chat typing indicator */
 @keyframes typing-dot {
   0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }

@@ -268,12 +268,13 @@ export default function App() {
   const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null)
   const [renameNode, setRenameNode] = useState<FileNode | null>(null)
   const [deleteNode, setDeleteNode] = useState<FileNode | null>(null)
+  const [searchVisible, setSearchVisible] = useState(false)
+  const [searchFocusTrigger, setSearchFocusTrigger] = useState(0)
 
+  // Close search when switching tabs
   useEffect(() => {
-    applyTheme(theme)
-    applyFont(font)
-    applyScale(scale)
-  }, [theme, font, scale])
+    setSearchVisible(false) // eslint-disable-line react-hooks/set-state-in-effect -- intentional: close search on tab switch
+  }, [activePath])
 
   useEffect(() => {
     try { localStorage.setItem('readown.chatOpen', String(chatOpen)) } catch { /* ignore */ }
@@ -761,6 +762,20 @@ export default function App() {
 
       if (e.shiftKey) return
 
+      if (e.key.toLowerCase() === 'f') {
+        // Only show search bar in preview mode; Cmd+F in edit mode is ignored
+        if (activePath && !editingPaths.has(activePath)) {
+          e.preventDefault()
+          if (searchVisible) {
+            setSearchFocusTrigger((n) => n + 1)
+          } else {
+            setSearchVisible(true)
+          }
+        } else {
+          e.preventDefault()
+        }
+        return
+      }
       if (e.key.toLowerCase() === 'w') {
         e.preventDefault()
         closeActiveTabRef.current()
@@ -805,7 +820,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode, createUntitledTab, forceCloseTab])
+  }, [tabs, handleOpen, activePath, setActivePathAndCheckModified, reloadTab, unsavedChanges, saveFile, toggleEditMode, createUntitledTab, forceCloseTab, editingPaths, searchVisible])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -964,9 +979,18 @@ export default function App() {
         void handleOpen()
       }),
       electron.onOpenSettings?.(() => setSettingsOpen(true)),
+      electron.onFindInPage?.(() => {
+        if (activePath && !editingPaths.has(activePath)) {
+          if (searchVisible) {
+            setSearchFocusTrigger((n) => n + 1)
+          } else {
+            setSearchVisible(true)
+          }
+        }
+      }),
     ]
     return () => unsubs.forEach((unsub) => unsub?.())
-  }, [handleOpen])
+  }, [handleOpen, activePath, editingPaths, searchVisible])
 
   const dragCountRef = useRef(0)
 
@@ -1157,6 +1181,9 @@ export default function App() {
                 onToggleEdit={activePath ? () => toggleEditMode(activePath) : undefined}
                 onToggleChat={() => setChatOpen((v) => !v)}
                 isEditing={false}
+                searchVisible={searchVisible}
+                onSearchClose={() => setSearchVisible(false)}
+                searchFocusTrigger={searchFocusTrigger}
               />
             )}
           </div>
