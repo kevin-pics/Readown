@@ -5,7 +5,7 @@ import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileText, MessageSquare, Pencil, Sparkles } from 'lucide-react'
-import { cn, isExternalHref } from '@/lib/utils'
+import { cn, isExternalHref, resolveRelativePath } from '@/lib/utils'
 
 interface MarkdownPreviewProps {
   content: string
@@ -46,8 +46,24 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   const html = useMemo(() => {
     if (!content) return ''
     const raw = marked.parse(content) as string
-    return DOMPurify.sanitize(raw)
-  }, [content])
+    const sanitized = DOMPurify.sanitize(raw, {
+      ADD_ATTR: ['src'],
+      ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|tel|file|data):|[^a-z]|[a-z+.-]+(?:[^a-z:]|$))/i,
+    })
+    if (!filePath) return sanitized
+    const container = document.createElement('div')
+    container.innerHTML = sanitized
+    container.querySelectorAll('img').forEach((img) => {
+      const src = img.getAttribute('src')
+      if (!src || isExternalHref(src) || src.startsWith('data:')) return
+      const resolved = resolveRelativePath(filePath, src)
+      if (resolved) {
+        const fileUrl = resolved.replace(/\\/g, '/')
+        img.setAttribute('src', `file://${fileUrl.startsWith('/') ? '' : '//'}${fileUrl}`)
+      }
+    })
+    return container.innerHTML
+  }, [content, filePath])
 
   useEffect(() => {
     const codeTheme = document.documentElement.style.getPropertyValue('--code-theme').trim() || 'atom-one-light'
