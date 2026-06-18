@@ -259,7 +259,7 @@ export default function App() {
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(() => {
-    try { return localStorage.getItem('readown.chatOpen') !== 'false' } catch { return false }
+    try { return localStorage.getItem('readown.chatOpen') !== 'false' } catch { return true }
   })
   const [chatDraft, setChatDraft] = useState<string | null>(null)
   const [chatModels, setChatModels] = useState<ChatModel[]>(() => getStoredChatModels())
