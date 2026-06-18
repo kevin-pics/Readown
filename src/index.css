@@ -1,6 +1,14 @@
 @import 'tailwindcss';
 @config '../tailwind.config.js';
 
+/* Fix: Radix ScrollArea uses display:table + min-width:100% on inner wrapper,
+   which prevents content from shrinking when parent width changes (e.g. chat panel toggle).
+   Switch to block layout so content respects the viewport width. */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
+}
+
 @layer base {
   :root {
     --radius: 0.5rem;
