@@ -154,6 +154,34 @@
   @apply border-0 bg-transparent p-0;
   font-size: 1em;
 }
+.prose .mermaid-wrapper {
+  @apply relative mb-4 rounded-lg border;
+  background-color: var(--prose-code-bg, hsl(var(--muted)));
+  border-color: var(--prose-table-border, hsl(var(--border)));
+}
+.prose .mermaid-preview {
+  @apply p-4 overflow-x-auto;
+  display: flex;
+  justify-content: center;
+}
+.prose .mermaid-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+.prose .mermaid-wrapper pre {
+  @apply mb-0;
+}
+.prose .mermaid-toggle-btn {
+  @apply absolute top-2 right-2 z-10 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors;
+  background-color: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  border-color: var(--prose-table-border, hsl(var(--border)));
+  cursor: pointer;
+}
+.prose .mermaid-toggle-btn:hover {
+  @apply text-foreground;
+  background-color: hsl(var(--accent));
+}
 .prose a {
   @apply font-medium hover:underline;
   color: var(--prose-link, hsl(var(--primary)));

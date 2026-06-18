@@ -3,11 +3,19 @@ import { createPortal } from 'react-dom'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
+import mermaid from 'mermaid'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { SearchBar } from '@/components/SearchBar'
 import { FileText, MessageSquare, Pencil, Sparkles } from 'lucide-react'
 import { cn, isExternalHref, resolveRelativePath } from '@/lib/utils'
 import { memo } from 'react'
+
+// Initialize mermaid once at module level
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'default',
+  securityLevel: 'loose',
+})
 
 function ContentDiv({ html, onClick }: { html: string; onClick: (e: React.MouseEvent<HTMLElement>) => void }) {
   return <div onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
@@ -40,6 +48,11 @@ marked.setOptions({
 marked.use({
   renderer: {
     code({ text, lang }: { text: string; lang?: string }) {
+      if (lang === 'mermaid') {
+        const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`
+        const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        return `<div class="mermaid-wrapper" data-mermaid-id="${id}" data-mermaid-source="${encodeURIComponent(text)}"><div class="mermaid-preview"></div><pre><code class="hljs language-mermaid" style="display:none">${escaped}</code></pre></div>`
+      }
       const language = lang || 'plaintext'
       const highlighted = hljs.getLanguage(language)
         ? hljs.highlight(text, { language }).value
@@ -65,7 +78,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
     if (!content) return ''
     const raw = marked.parse(content) as string
     const sanitized = DOMPurify.sanitize(raw, {
-      ADD_ATTR: ['src'],
+      ADD_ATTR: ['src', 'data-mermaid-id', 'data-mermaid-source'],
       ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|tel|file|data):|[^a-z]|[a-z+.-]+(?:[^a-z:]|$))/i,
     })
     if (!filePath) return sanitized
@@ -98,6 +111,18 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   const menuRef = useRef<HTMLDivElement>(null)
   const menuTextRef = useRef('')
   const menuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [mermaidModes, setMermaidModes] = useState<Record<string, 'preview' | 'code'>>({})
+  const handleMermaidToggle = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mermaid-toggle]')
+    if (!btn) return
+    e.stopPropagation()
+    const id = btn.getAttribute('data-mermaid-toggle')!
+    setMermaidModes((prev) => {
+      const current = prev[id] || 'preview'
+      const next = current === 'preview' ? 'code' : 'preview'
+      return { ...prev, [id]: next }
+    })
+  }, [])
 
   const getViewport = () =>
     scrollRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]') ?? null
@@ -127,6 +152,68 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
       hljs.highlightElement(block)
     })
   }, [html])
+
+  useEffect(() => {
+    const wrappers = articleRef.current?.querySelectorAll<HTMLElement>('.mermaid-wrapper')
+    if (!wrappers || wrappers.length === 0) return
+
+    // Update theme based on current mode
+    const isDark = document.documentElement.classList.contains('dark')
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isDark ? 'dark' : 'default',
+      securityLevel: 'loose',
+    })
+
+    let cancelled = false
+    const renderAll = async () => {
+      for (const wrapper of wrappers) {
+        if (cancelled) return
+        const previewEl = wrapper.querySelector<HTMLElement>('.mermaid-preview')
+        const source = decodeURIComponent(wrapper.getAttribute('data-mermaid-source') || '')
+        if (!previewEl || !source) continue
+        // Skip if already rendered
+        if (previewEl.querySelector('svg')) continue
+        try {
+          const renderId = `mermaid-render-${Math.random().toString(36).slice(2, 10)}`
+          const { svg } = await mermaid.render(renderId, source)
+          if (!cancelled) previewEl.innerHTML = svg
+        } catch (e) {
+          console.error('Mermaid render error:', e)
+          if (!cancelled) previewEl.innerHTML = '<p style="color:var(--destructive);font-size:0.8rem;padding:0.5rem">Mermaid syntax error</p>'
+        }
+      }
+    }
+    renderAll()
+    return () => { cancelled = true }
+  }, [html])
+
+  useEffect(() => {
+    const wrappers = articleRef.current?.querySelectorAll<HTMLElement>('.mermaid-wrapper')
+    if (!wrappers || wrappers.length === 0) return
+
+    for (const wrapper of wrappers) {
+      const id = wrapper.getAttribute('data-mermaid-id') || ''
+      const preview = wrapper.querySelector<HTMLElement>('.mermaid-preview')
+      const codeEl = wrapper.querySelector('pre')
+      const mode = mermaidModes[id] || 'preview'
+
+      if (preview) preview.style.display = mode === 'preview' ? '' : 'none'
+      if (codeEl) codeEl.style.display = mode === 'code' ? '' : 'none'
+
+      // Add or update toggle button
+      let btn = wrapper.querySelector<HTMLButtonElement>('[data-mermaid-toggle]')
+      if (!btn) {
+        btn = document.createElement('button')
+        btn.setAttribute('data-mermaid-toggle', id)
+        btn.className = 'mermaid-toggle-btn'
+        btn.textContent = mode === 'preview' ? 'Code' : 'Preview'
+        wrapper.prepend(btn)
+      } else {
+        btn.textContent = mode === 'preview' ? 'Code' : 'Preview'
+      }
+    }
+  }, [html, mermaidModes])
 
   // --- Search / find-in-page ---
   const clearHighlights = useCallback(() => {
@@ -367,6 +454,12 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
 
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     onFocus?.()
+    // Handle mermaid toggle button
+    const mermaidBtn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mermaid-toggle]')
+    if (mermaidBtn) {
+      handleMermaidToggle(e)
+      return
+    }
     const anchor = (e.target as HTMLElement).closest('a')
     if (!anchor) return
     const href = anchor.getAttribute('href')
@@ -413,7 +506,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="relative flex min-w-0 h-full flex-col">
       <SearchBar
         visible={!!searchVisible}
         onClose={() => onSearchClose?.()}

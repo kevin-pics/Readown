@@ -1170,7 +1170,7 @@ export default function App() {
       <main className="relative flex flex-1 flex-col overflow-hidden bg-background">
         <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} unsavedPaths={unsavedChanges} editingPaths={editingPaths} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
         <div className="flex flex-1 overflow-hidden">
-          <div className="relative flex flex-1 flex-col overflow-hidden">
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
             {activePath && editingPaths.has(activePath) ? (
               <MarkdownEditor
                 key={activePath}
