@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir, stat, writeFile, rename, rm } from 'fs/promises'
 import { watch } from 'fs'
@@ -17,9 +17,10 @@ if (!gotTheLock) {
 }
 
 function createWindow(openFilePath?: string): BrowserWindow {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const win = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    width,
+    height,
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: 'default',
