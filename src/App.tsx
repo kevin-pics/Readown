@@ -727,7 +727,7 @@ export default function App() {
       const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
       setDirPath(rootPath || null)
       if (rootPath) {
-        pushRecentDir(rootPath, nodes[0]?.relativePath.split('/')[0] ?? rootPath.split(/[\\/]/).pop() ?? 'Directory')
+        pushRecentDir(rootPath, rootPath.split(/[\\/]/).pop() || 'Directory')
       }
       if (rootPath && api.watchDirectory) {
         void api.watchDirectory(rootPath)
@@ -906,11 +906,8 @@ export default function App() {
               : source.name) ??
             'Directory'
         )
-        if (typeof source === 'string' && rootDir) {
-          pushRecentDir(
-            rootDir,
-            nodes[0]?.relativePath.split('/')[0] ?? source.split('/').pop() ?? 'Directory'
-          )
+        if (typeof source === 'string' && rootDir && selectPath === undefined) {
+          pushRecentDir(rootDir, rootDir.split(/[\\/]/).pop() || 'Directory')
         }
         const untitledTabs = tabsRef.current.filter((p) => isUntitledPath(p))
         const untitledContents: Record<string, string> = {}
