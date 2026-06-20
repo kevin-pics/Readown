@@ -12,7 +12,7 @@ import { RenameDialog } from '@/components/RenameDialog'
 import { DeleteDialog } from '@/components/DeleteDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
-import { BookOpen, FileText, Folder, FolderOpen } from 'lucide-react'
+import { BookOpen, FileText, Folder, FolderOpen, X } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import { getStoredChatModels, type ChatModel } from '@/lib/chat'
@@ -234,6 +234,26 @@ export default function App() {
   })
   const [tree, setTree] = useState<FileNode[]>([])
   const [dirPath, setDirPath] = useState<string | null>(null)
+  const [recentDirs, setRecentDirs] = useState<{ path: string; name: string }[]>(() => {
+    try {
+      const raw = localStorage.getItem('readown.recentDirs')
+      return raw ? (JSON.parse(raw) as { path: string; name: string }[]) : []
+    } catch { return [] }
+  })
+  const pushRecentDir = useCallback((path: string, name: string) => {
+    setRecentDirs((prev) => {
+      const next = [{ path, name }, ...prev.filter((d) => d.path !== path)].slice(0, 5)
+      try { localStorage.setItem('readown.recentDirs', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+  const removeRecentDir = useCallback((path: string) => {
+    setRecentDirs((prev) => {
+      const next = prev.filter((d) => d.path !== path)
+      try { localStorage.setItem('readown.recentDirs', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
   const [tabs, setTabs] = useState<string[]>([])
   const tabsRef = useRef(tabs)
   const [activePath, setActivePath] = useState<string | null>(null)
@@ -706,6 +726,9 @@ export default function App() {
 
       const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
       setDirPath(rootPath || null)
+      if (rootPath) {
+        pushRecentDir(rootPath, nodes[0]?.relativePath.split('/')[0] ?? rootPath.split(/[\\/]/).pop() ?? 'Directory')
+      }
       if (rootPath && api.watchDirectory) {
         void api.watchDirectory(rootPath)
       }
@@ -719,7 +742,7 @@ export default function App() {
     } finally {
       setOpeningDir(false)
     }
-  }, [api, openFile])
+  }, [api, openFile, pushRecentDir])
 
   useEffect(() => {
     const electron = window.readownAPI
@@ -883,6 +906,12 @@ export default function App() {
               : source.name) ??
             'Directory'
         )
+        if (typeof source === 'string' && rootDir) {
+          pushRecentDir(
+            rootDir,
+            nodes[0]?.relativePath.split('/')[0] ?? source.split('/').pop() ?? 'Directory'
+          )
+        }
         const untitledTabs = tabsRef.current.filter((p) => isUntitledPath(p))
         const untitledContents: Record<string, string> = {}
         for (const p of untitledTabs) {
@@ -917,7 +946,7 @@ export default function App() {
         setError((err as Error).message)
       }
     },
-    [api, openFile]
+    [api, openFile, pushRecentDir]
   )
 
   useEffect(() => {
@@ -1141,19 +1170,49 @@ export default function App() {
           {!isEmpty ? (
             <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} onRename={api.renamePath ? (node) => setRenameNode(node) : undefined} onDelete={api.deletePath ? (node) => setDeleteNode(node) : undefined} />
           ) : (
-            <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-                {rootName ? (
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                ) : (
-                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
-                )}
+            <>
+              <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                  {rootName ? (
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                  ) : (
+                    <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">No directory open</p>
+                  <p className="max-w-[220px] text-xs text-muted-foreground">Drop a directory here to start.</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">No directory open</p>
-                <p className="max-w-[220px] text-xs text-muted-foreground">Drop a directory here to start.</p>
-              </div>
-            </div>
+              {!dirPath && recentDirs.length > 0 && (
+                <div className="border-t px-2 py-2">
+                  <p className="px-1 pb-1.5 text-xs font-semibold tracking-wide text-foreground">Recents</p>
+                  {recentDirs.map((item) => (
+                    <div
+                      key={item.path}
+                      className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                    >
+                      <button
+                        onClick={() => void loadDirectory(item.path)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        title={item.path}
+                      >
+                        <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                        <span className="truncate text-muted-foreground">{item.name}</span>
+                      </button>
+                      <button
+                        onClick={() => removeRecentDir(item.path)}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                        title="Remove from recents"
+                        aria-label="Remove from recents"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </ScrollArea>
       </aside>
@@ -1182,22 +1241,22 @@ export default function App() {
                 onToggleEdit={() => toggleEditMode(activePath)}
                 onToggleChat={() => setChatOpen((v) => !v)}
               />
-            ) : (
+            ) : activePath ? (
               <MarkdownPreview
-                content={activePath ? contents[activePath] ?? '' : ''}
+                content={contents[activePath] ?? ''}
                 filePath={activePath}
                 contentWidth={contentWidth.value}
                 onOpenRelative={handleOpenRelative}
                 onFocus={handlePreviewFocus}
                 onAskAI={(text) => { setChatOpen(true); setChatDraft(text) }}
-                onToggleEdit={activePath ? () => toggleEditMode(activePath) : undefined}
+                onToggleEdit={() => toggleEditMode(activePath)}
                 onToggleChat={() => setChatOpen((v) => !v)}
                 isEditing={false}
                 searchVisible={searchVisible}
                 onSearchClose={() => setSearchVisible(false)}
                 searchFocusTrigger={searchFocusTrigger}
               />
-            )}
+            ) : null}
           </div>
           <ChatPanel
             open={chatOpen}
