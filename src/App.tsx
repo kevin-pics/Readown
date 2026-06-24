@@ -290,6 +290,7 @@ export default function App() {
   const [deleteNode, setDeleteNode] = useState<FileNode | null>(null)
   const [searchVisible, setSearchVisible] = useState(false)
   const [searchFocusTrigger, setSearchFocusTrigger] = useState(0)
+  const previewScrollFractionsRef = useRef<Record<string, number>>({})
 
   // Close search when switching tabs
   useEffect(() => {
@@ -1237,6 +1238,8 @@ export default function App() {
                 onSave={() => void saveFile(activePath)}
                 onToggleEdit={() => toggleEditMode(activePath)}
                 onToggleChat={() => setChatOpen((v) => !v)}
+                initialScrollFraction={previewScrollFractionsRef.current[activePath]}
+                onScrollFractionChange={(fraction) => { previewScrollFractionsRef.current[activePath] = fraction }}
               />
             ) : activePath ? (
               <MarkdownPreview
@@ -1252,6 +1255,8 @@ export default function App() {
                 searchVisible={searchVisible}
                 onSearchClose={() => setSearchVisible(false)}
                 searchFocusTrigger={searchFocusTrigger}
+                onScrollFractionChange={(fraction) => { previewScrollFractionsRef.current[activePath] = fraction }}
+                initialScrollFraction={previewScrollFractionsRef.current[activePath]}
               />
             ) : null}
           </div>

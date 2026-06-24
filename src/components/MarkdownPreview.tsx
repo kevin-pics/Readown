@@ -36,6 +36,8 @@ interface MarkdownPreviewProps {
   searchVisible?: boolean
   onSearchClose?: () => void
   searchFocusTrigger?: number
+  onScrollFractionChange?: (fraction: number) => void
+  initialScrollFraction?: number
 }
 
 
@@ -51,7 +53,7 @@ marked.use({
       if (lang === 'mermaid') {
         const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`
         const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        return `<div class="mermaid-wrapper" data-mermaid-id="${id}" data-mermaid-source="${encodeURIComponent(text)}"><div class="mermaid-preview"></div><pre><code class="hljs language-mermaid" style="display:none">${escaped}</code></pre></div>`
+        return `<div class="mermaid-wrapper" data-mermaid-id="${id}" data-mermaid-source="${encodeURIComponent(text)}"><div class="mermaid-preview"></div><pre style="display:none"><code class="hljs language-mermaid">${escaped}</code></pre></div>`
       }
       const language = lang || 'plaintext'
       const highlighted = hljs.getLanguage(language)
@@ -67,7 +69,7 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, onToggleChat, isEditing, searchVisible, onSearchClose, searchFocusTrigger }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, onToggleChat, isEditing, searchVisible, onSearchClose, searchFocusTrigger, onScrollFractionChange, initialScrollFraction }: MarkdownPreviewProps) {
   const [matchCount, setMatchCount] = useState(0)
   const [currentMatch, setCurrentMatch] = useState(0)
   const matchesRef = useRef<number[]>([])
@@ -104,6 +106,9 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
     })
   }, [filePath])
 
+  const onScrollFractionChangeRef = useRef(onScrollFractionChange)
+  useEffect(() => { onScrollFractionChangeRef.current = onScrollFractionChange }, [onScrollFractionChange])
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollPositions = useRef<Record<string, number>>({})
   const currentPathRef = useRef<string | null>(null)
@@ -135,16 +140,30 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
         scrollPositions.current[currentPathRef.current] = viewport.scrollTop
       }
       hideMenu()
+      const cb = onScrollFractionChangeRef.current
+      if (cb) {
+        const maxScroll = viewport.scrollHeight - viewport.clientHeight
+        cb(maxScroll > 0 ? viewport.scrollTop / maxScroll : 0)
+      }
     }
     viewport.addEventListener('scroll', onScroll, { passive: true })
     return () => viewport.removeEventListener('scroll', onScroll)
   }, [filePath])
 
+  const initialScrollFractionRef = useRef(initialScrollFraction ?? 0)
+
   useLayoutEffect(() => {
     const viewport = getViewport()
     if (!viewport) return
     currentPathRef.current = filePath
-    viewport.scrollTop = filePath ? scrollPositions.current[filePath] ?? 0 : 0
+    const stored = filePath ? scrollPositions.current[filePath] : undefined
+    if (stored !== undefined) {
+      viewport.scrollTop = stored
+    } else if (initialScrollFractionRef.current > 0) {
+      viewport.scrollTop = initialScrollFractionRef.current * (viewport.scrollHeight - viewport.clientHeight)
+    } else {
+      viewport.scrollTop = 0
+    }
   }, [filePath, html])
 
   useEffect(() => {

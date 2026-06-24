@@ -72,10 +72,6 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
         inputRef.current?.setSelectionRange(draftInput.length, draftInput.length)
       })
       onDraftConsumed?.()
-    } else {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-      })
     }
   }, [draftInput, open, onDraftConsumed])
 

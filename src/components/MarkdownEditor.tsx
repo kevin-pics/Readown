@@ -20,6 +20,8 @@ interface MarkdownEditorProps {
   onSave: () => void
   onToggleEdit?: () => void
   onToggleChat?: () => void
+  initialScrollFraction?: number
+  onScrollFractionChange?: (fraction: number) => void
 }
 
 function isDarkMode(): boolean {
@@ -28,13 +30,15 @@ function isDarkMode(): boolean {
     window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSave, onToggleEdit, onToggleChat }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSave, onToggleEdit, onToggleChat, initialScrollFraction, onScrollFractionChange }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
   const isDarkRef = useRef(isDarkMode())
   const skipNextChangeRef = useRef(false)
+  const initialScrollFractionRef = useRef(initialScrollFraction ?? 0)
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -44,6 +48,21 @@ export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSa
     onSaveRef.current = onSave
   }, [onSave])
 
+  const onScrollFractionChangeRef = useRef(onScrollFractionChange)
+  useEffect(() => { onScrollFractionChangeRef.current = onScrollFractionChange }, [onScrollFractionChange])
+
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+    if (!viewport) return
+    const onScroll = () => {
+      const cb = onScrollFractionChangeRef.current
+      if (!cb) return
+      const maxScroll = viewport.scrollHeight - viewport.clientHeight
+      cb(maxScroll > 0 ? viewport.scrollTop / maxScroll : 0)
+    }
+    viewport.addEventListener('scroll', onScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', onScroll)
+  }, [filePath])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -134,9 +153,17 @@ export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSa
     })
 
     viewRef.current = view
-    // Focus after the editor is fully mounted in the DOM
     requestAnimationFrame(() => {
       view.focus()
+      requestAnimationFrame(() => {
+        const frac = initialScrollFractionRef.current
+        if (frac > 0) {
+          const viewport = scrollAreaRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]')
+          if (viewport) {
+            viewport.scrollTop = frac * (viewport.scrollHeight - viewport.clientHeight)
+          }
+        }
+      })
     })
 
     return () => {
@@ -268,7 +295,7 @@ export function MarkdownEditor({ content, filePath, contentWidth, onChange, onSa
   }, [])
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea ref={scrollAreaRef} className="h-full">
       <div
         className={cn('px-8 py-8', contentWidth === '100%' && 'max-w-none')}
         style={{ maxWidth: contentWidth !== '100%' ? contentWidth : undefined }}
