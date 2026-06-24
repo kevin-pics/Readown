@@ -65,18 +65,19 @@ export function ChatPanel({ open, onClose, filePath, fileContent, width, onResiz
 
   useEffect(() => {
     if (!open) return
-    if (draftInput != null) {
-      setInput(draftInput)
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-        inputRef.current?.setSelectionRange(draftInput.length, draftInput.length)
-      })
-      onDraftConsumed?.()
-    } else {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-      })
-    }
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+    })
+  }, [open])
+
+  useEffect(() => {
+    if (!open || draftInput == null) return
+    setInput(draftInput)
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.setSelectionRange(draftInput.length, draftInput.length)
+    })
+    onDraftConsumed?.()
   }, [draftInput, open, onDraftConsumed])
 
   useEffect(() => {
