@@ -1,7 +1,8 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain, shell, screen } from 'electron'
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron'
 import { readFile, readdir, stat, writeFile, rename, rm } from 'fs/promises'
-import { watch } from 'fs'
+import chokidar from 'chokidar'
+import type { FSWatcher } from 'chokidar'
 import { fileURLToPath } from 'url'
 import { dirname, join, relative } from 'path'
 
@@ -417,12 +418,12 @@ ipcMain.handle(
   }
 )
 
-let currentWatcher: ReturnType<typeof watch> | null = null
+let currentWatcher: FSWatcher | null = null
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function stopWatching() {
   if (currentWatcher) {
-    currentWatcher.close()
+    void currentWatcher.close()
     currentWatcher = null
   }
   if (debounceTimer) {
@@ -437,7 +438,7 @@ ipcMain.handle(
     stopWatching()
     if (!dirPath) return
     try {
-      currentWatcher = watch(dirPath, { recursive: true }, () => {
+      const sendChange = () => {
         if (debounceTimer) clearTimeout(debounceTimer)
         debounceTimer = setTimeout(() => {
           const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
@@ -445,7 +446,18 @@ ipcMain.handle(
             win.webContents.send('directory-changed', dirPath)
           }
         }, 300)
+      }
+      currentWatcher = chokidar.watch(dirPath, {
+        ignoreInitial: true,
+        ignored: /(^|[/\\])(\.git|node_modules|\.DS_Store)/,
+        persistent: true,
+        depth: 20,
       })
+      currentWatcher.on('add', sendChange)
+      currentWatcher.on('change', sendChange)
+      currentWatcher.on('unlink', sendChange)
+      currentWatcher.on('addDir', sendChange)
+      currentWatcher.on('unlinkDir', sendChange)
     } catch {
       stopWatching()
     }
