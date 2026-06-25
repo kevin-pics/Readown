@@ -298,26 +298,9 @@ async function scanDirectory(dirPath: string, basePath: string): Promise<TreeNod
     )
   }
 
-  const pruneEmpty = (nodes: TreeNode[]): TreeNode[] => {
-    const kept: TreeNode[] = []
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        kept.push(node)
-        continue
-      }
-      node.children = pruneEmpty(node.children || [])
-      if (node.children.length > 0) {
-        kept.push(node)
-      }
-    }
-    return kept
-  }
-
-  const pruned = pruneEmpty(rootNodes)
-  if (pruned.length === 0) {
+  if (visitedFiles === 0) {
     return []
   }
-  rootNodes.splice(0, rootNodes.length, ...pruned)
 
   const sortNodes = (nodes: TreeNode[]) => {
     nodes.sort((a, b) => {
@@ -453,11 +436,7 @@ ipcMain.handle(
         persistent: true,
         depth: 20,
       })
-      currentWatcher.on('add', sendChange)
-      currentWatcher.on('change', sendChange)
-      currentWatcher.on('unlink', sendChange)
-      currentWatcher.on('addDir', sendChange)
-      currentWatcher.on('unlinkDir', sendChange)
+      currentWatcher.on('all', sendChange)
     } catch {
       stopWatching()
     }

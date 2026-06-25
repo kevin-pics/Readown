@@ -118,26 +118,9 @@ function createBrowserAPI(): DirectoryAPI {
       }
     }
 
-    const pruneEmpty = (nodes: FileNode[]): FileNode[] => {
-      const kept: FileNode[] = []
-      for (const node of nodes) {
-        if (node.type === 'file') {
-          kept.push(node)
-          continue
-        }
-        node.children = pruneEmpty(node.children || [])
-        if (node.children.length > 0) {
-          kept.push(node)
-        }
-      }
-      return kept
-    }
-
-    const pruned = pruneEmpty(rootNodes)
-    if (pruned.length === 0) {
+    if (visitedFiles === 0) {
       return []
     }
-    rootNodes.splice(0, rootNodes.length, ...pruned)
 
     const sortNodes = (nodes: FileNode[]) => {
       nodes.sort((a, b) => {
@@ -988,7 +971,7 @@ export default function App() {
             setTree(nodes)
             setRootName(nodes[0]?.relativePath.split('/')[0] ?? changedPath.split('/').pop() ?? 'Directory')
           } catch {
-            // ignore reload errors
+            setError('The directory could not be reloaded. It may have been moved, renamed, or deleted. Please open it again.')
           }
         })()
       }
