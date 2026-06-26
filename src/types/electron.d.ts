@@ -9,6 +9,7 @@ export interface FileNode {
 export interface ReadownAPI {
   openDirectory: () => Promise<FileNode[] | null>
   scanDirectory: (dirPath: string) => Promise<FileNode[]>
+  scanChildren: (dirPath: string, basePath: string) => Promise<FileNode[]>
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
   onCloseTab: (callback: () => void) => () => void
@@ -18,7 +19,7 @@ export interface ReadownAPI {
   onDirectoryChange: (callback: (dirPath: string) => void) => () => void
   closeWindow: () => void
   isDirectory: (filePath: string) => Promise<boolean>
-  watchDirectory: (dirPath: string | null) => Promise<void>
+  setWatchedDirs: (paths: string[]) => Promise<void>
   getPathForFile: (file: File) => string
   writeFile: (filePath: string, content: string) => Promise<void>
   renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>

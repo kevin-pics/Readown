@@ -11,6 +11,7 @@ export interface FileNode {
 export interface ReadownAPI {
   openDirectory: () => Promise<FileNode[] | null>
   scanDirectory: (dirPath: string) => Promise<FileNode[]>
+  scanChildren: (dirPath: string, basePath: string) => Promise<FileNode[]>
   readFile: (filePath: string) => Promise<string>
   onDragDrop: (callback: (dirPath: string) => void) => () => void
   onCloseTab: (callback: () => void) => () => void
@@ -20,7 +21,7 @@ export interface ReadownAPI {
   onDirectoryChange: (callback: (dirPath: string) => void) => () => void
   closeWindow: () => void
   isDirectory: (filePath: string) => Promise<boolean>
-  watchDirectory: (dirPath: string | null) => Promise<void>
+  setWatchedDirs: (paths: string[]) => Promise<void>
   getPathForFile: (file: File) => string
   writeFile: (filePath: string, content: string) => Promise<void>
   renamePath: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
@@ -37,6 +38,7 @@ function onChannel(channel: string, callback: () => void) {
 const api: ReadownAPI = {
   openDirectory: () => ipcRenderer.invoke('open-directory'),
   scanDirectory: (dirPath: string) => ipcRenderer.invoke('scan-directory', dirPath),
+  scanChildren: (dirPath: string, basePath: string) => ipcRenderer.invoke('scan-children', dirPath, basePath),
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
   onDragDrop: (callback: (dirPath: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, dirPath: string) => callback(dirPath)
@@ -54,7 +56,7 @@ const api: ReadownAPI = {
   },
   closeWindow: () => ipcRenderer.send('close-window'),
   isDirectory: (filePath: string) => ipcRenderer.invoke('is-directory', filePath),
-  watchDirectory: (dirPath: string | null) => ipcRenderer.invoke('watch-directory', dirPath),
+  setWatchedDirs: (paths: string[]) => ipcRenderer.invoke('set-watched-dirs', paths),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write-file', filePath, content),
   renamePath: (oldPath: string, newName: string) => ipcRenderer.invoke('rename-path', oldPath, newName),

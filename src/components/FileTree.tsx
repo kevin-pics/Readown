@@ -19,11 +19,12 @@ interface FileTreeProps {
   nodes: FileNode[]
   selectedPath: string | null
   onSelect: (path: string) => void
+  onLoadChildren?: (node: FileNode) => void
   onRename?: (node: FileNode) => void
   onDelete?: (node: FileNode) => void
 }
 
-export function FileTree({ nodes, selectedPath, onSelect, onRename, onDelete }: FileTreeProps) {
+export function FileTree({ nodes, selectedPath, onSelect, onLoadChildren, onRename, onDelete }: FileTreeProps) {
   return (
     <div className="select-none py-2">
       {nodes.map((node) => (
@@ -32,6 +33,7 @@ export function FileTree({ nodes, selectedPath, onSelect, onRename, onDelete }: 
           node={node}
           selectedPath={selectedPath}
           onSelect={onSelect}
+          onLoadChildren={onLoadChildren}
           depth={0}
           onRename={onRename}
           onDelete={onDelete}
@@ -45,12 +47,13 @@ interface TreeNodeProps {
   node: FileNode
   selectedPath: string | null
   onSelect: (path: string) => void
+  onLoadChildren?: (node: FileNode) => void
   depth: number
   onRename?: (node: FileNode) => void
   onDelete?: (node: FileNode) => void
 }
 
-function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: TreeNodeProps) {
+function TreeNode({ node, selectedPath, onSelect, onLoadChildren, depth, onRename, onDelete }: TreeNodeProps) {
   const [open, setOpen] = useState(false)
   const INDENT = 16
   const folderPad = depth * INDENT + 8
@@ -63,6 +66,13 @@ function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: T
   const handleDelete = useCallback(() => {
     if (onDelete) setTimeout(() => onDelete(node), 0)
   }, [onDelete, node])
+
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next)
+    if (next && node.children === undefined && onLoadChildren) {
+      onLoadChildren(node)
+    }
+  }, [node, onLoadChildren])
 
   if (node.type === 'file') {
     const fileButton = (
@@ -139,7 +149,7 @@ function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: T
   const contextMenuItems = onRename || onDelete
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={open} onOpenChange={handleOpenChange}>
       {contextMenuItems ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
@@ -172,12 +182,13 @@ function TreeNode({ node, selectedPath, onSelect, depth, onRename, onDelete }: T
       )}
       <CollapsibleContent>
         <div>
-          {node.children!.map((child: FileNode) => (
+          {(node.children ?? []).map((child: FileNode) => (
             <TreeNode
               key={child.path}
               node={child}
               selectedPath={selectedPath}
               onSelect={onSelect}
+              onLoadChildren={onLoadChildren}
               depth={depth + 1}
               onRename={onRename}
               onDelete={onDelete}

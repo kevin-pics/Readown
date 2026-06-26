@@ -20,13 +20,14 @@ import { getStoredChatModels, type ChatModel } from '@/lib/chat'
 interface DirectoryAPI {
   openDirectory: () => Promise<FileNode[] | null>
   loadDirectory: (source: string | FileSystemDirectoryHandle, selectPath?: string) => Promise<FileNode[]>
+  loadChildren?: (dirPath: string, rootPath: string) => Promise<FileNode[]>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<void>
   renamePath?: (oldPath: string, newName: string) => Promise<{ success: boolean; newPath?: string; error?: string }>
   deletePath?: (targetPath: string) => Promise<{ success: boolean; error?: string }>
   onDragDrop: (callback: (source: string | FileSystemDirectoryHandle) => void) => () => void
   onDirectoryChange?: (callback: (dirPath: string) => void) => () => void
-  watchDirectory?: (dirPath: string | null) => Promise<void>
+  setWatchedDirs?: (paths: string[]) => Promise<void>
 }
 
 function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
@@ -38,6 +39,7 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
       }
       return electronAPI.scanDirectory(source)
     },
+    loadChildren: (dirPath, rootPath) => electronAPI.scanChildren(dirPath, rootPath),
     readFile: (path) => electronAPI.readFile(path),
     writeFile: (path, content) => electronAPI.writeFile(path, content),
     renamePath: electronAPI.renamePath ? (oldPath, newName) => electronAPI.renamePath!(oldPath, newName) : undefined,
@@ -46,94 +48,59 @@ function adaptElectronAPI(electronAPI: Window['readownAPI']): DirectoryAPI {
       electronAPI.onDragDrop((dirPath) => callback(dirPath)),
     onDirectoryChange: (callback) =>
       electronAPI.onDirectoryChange((dirPath) => callback(dirPath)),
-    watchDirectory: (dirPath) => electronAPI.watchDirectory(dirPath),
+    setWatchedDirs: (paths) => electronAPI.setWatchedDirs(paths),
   }
 }
 
 function createBrowserAPI(): DirectoryAPI {
   const fileHandles = new Map<string, FileSystemFileHandle>()
+  const dirHandles = new Map<string, FileSystemDirectoryHandle>()
   const EXCLUDED = new Set(['.git', 'node_modules', '.DS_Store'])
-  const MAX_FILES = 500
+  const PROBE_MAX_DEPTH = 12
+  const PROBE_BUDGET = 2000
 
-  async function scanHandle(handle: FileSystemDirectoryHandle): Promise<FileNode[]> {
-    const rootNodes: FileNode[] = []
-    let visitedFiles = 0
-
-    interface DirWithHandle {
-      handle: FileSystemDirectoryHandle
-      basePath: string
-      targetNodes: FileNode[]
-    }
-
-    const processDir = async (item: DirWithHandle) => {
-      const entries: FileSystemHandle[] = []
-      for await (const entry of item.handle.values()) {
-        entries.push(entry)
-      }
-
-      const childDirs: FileSystemDirectoryHandle[] = []
-
-      for (const entry of entries) {
+  async function hasMarkdownWithin(handle: FileSystemDirectoryHandle, depth: number, budget: { left: number }): Promise<boolean> {
+    if (budget.left <= 0 || depth > PROBE_MAX_DEPTH) return true
+    budget.left--
+    const subdirs: FileSystemDirectoryHandle[] = []
+    try {
+      for await (const entry of handle.values()) {
         if (EXCLUDED.has(entry.name)) continue
-        const rel = item.basePath ? `${item.basePath}/${entry.name}` : entry.name
+        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) return true
+        if (entry.kind === 'directory') subdirs.push(entry as FileSystemDirectoryHandle)
+      }
+    } catch {
+      return false
+    }
+    for (const sd of subdirs) {
+      if (budget.left <= 0) return true
+      if (await hasMarkdownWithin(sd, depth + 1, budget)) return true
+    }
+    return false
+  }
 
-        if (entry.kind === 'directory') {
-          childDirs.push(entry as FileSystemDirectoryHandle)
-        } else if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
-          if (visitedFiles < MAX_FILES) {
-            visitedFiles++
-            fileHandles.set(rel, entry as FileSystemFileHandle)
-            item.targetNodes.push({
-              name: entry.name,
-              path: rel,
-              relativePath: rel,
-              type: 'file',
-            })
-          }
+  async function scanLevel(handle: FileSystemDirectoryHandle, basePath: string): Promise<FileNode[]> {
+    const nodes: FileNode[] = []
+    const budget = { left: PROBE_BUDGET }
+    for await (const entry of handle.values()) {
+      if (EXCLUDED.has(entry.name)) continue
+      const rel = basePath ? `${basePath}/${entry.name}` : entry.name
+      if (entry.kind === 'directory') {
+        const dirHandle = entry as FileSystemDirectoryHandle
+        dirHandles.set(rel, dirHandle)
+        if (await hasMarkdownWithin(dirHandle, 1, budget)) {
+          nodes.push({ name: entry.name, path: rel, relativePath: rel, type: 'directory' })
         }
-      }
-
-      return childDirs
-    }
-
-    const queue: DirWithHandle[] = [{ handle, basePath: '', targetNodes: rootNodes }]
-    while (queue.length > 0) {
-      const batch = queue.splice(0, queue.length)
-      const nextChildren = await Promise.all(batch.map(processDir))
-      for (let i = 0; i < batch.length; i++) {
-        const { basePath, targetNodes } = batch[i]
-        for (const childHandle of nextChildren[i]) {
-          const rel = basePath ? `${basePath}/${childHandle.name}` : childHandle.name
-          const children: FileNode[] = []
-          const dirNode: FileNode & { children: FileNode[] } = {
-            name: childHandle.name,
-            path: rel,
-            relativePath: rel,
-            type: 'directory',
-            children,
-          }
-          targetNodes.push(dirNode)
-          queue.push({ handle: childHandle, basePath: rel, targetNodes: children })
-        }
+      } else if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
+        fileHandles.set(rel, entry as FileSystemFileHandle)
+        nodes.push({ name: entry.name, path: rel, relativePath: rel, type: 'file' })
       }
     }
-
-    if (visitedFiles === 0) {
-      return []
-    }
-
-    const sortNodes = (nodes: FileNode[]) => {
-      nodes.sort((a, b) => {
-        if (a.type === b.type) return a.name.localeCompare(b.name)
-        return a.type === 'directory' ? -1 : 1
-      })
-      for (const node of nodes) {
-        if (node.children) sortNodes(node.children)
-      }
-    }
-    sortNodes(rootNodes)
-
-    return rootNodes
+    nodes.sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name)
+      return a.type === 'directory' ? -1 : 1
+    })
+    return nodes
   }
 
   return {
@@ -145,7 +112,10 @@ function createBrowserAPI(): DirectoryAPI {
           )
         }
         const handle = await window.showDirectoryPicker()
-        return await scanHandle(handle)
+        dirHandles.clear()
+        fileHandles.clear()
+        dirHandles.set('', handle)
+        return await scanLevel(handle, '')
       } catch (err) {
         const name = (err as Error).name
         if (name === 'AbortError') return null
@@ -157,9 +127,17 @@ function createBrowserAPI(): DirectoryAPI {
     },
     loadDirectory: async (source) => {
       if (source instanceof FileSystemDirectoryHandle) {
-        return scanHandle(source)
+        dirHandles.clear()
+        fileHandles.clear()
+        dirHandles.set('', source)
+        return scanLevel(source, '')
       }
       throw new Error('Browser directory API requires a FileSystemDirectoryHandle')
+    },
+    loadChildren: async (dirPath) => {
+      const handle = dirHandles.get(dirPath)
+      if (!handle) throw new Error(`Directory not found: ${dirPath}`)
+      return scanLevel(handle, dirPath)
     },
     readFile: async (path) => {
       const handle = fileHandles.get(path)
@@ -172,6 +150,44 @@ function createBrowserAPI(): DirectoryAPI {
       throw new Error('Saving files is not supported in browser mode. Please use the Electron app.')
     },
   }
+}
+
+function setNodeChildren(
+  nodes: FileNode[],
+  targetPath: string,
+  updater: FileNode[] | ((old: FileNode[] | undefined) => FileNode[])
+): FileNode[] {
+  return nodes.map((n) => {
+    if (n.path === targetPath) {
+      const children = typeof updater === 'function' ? updater(n.children) : updater
+      return { ...n, children }
+    }
+    if (n.type === 'directory' && n.children) return { ...n, children: setNodeChildren(n.children, targetPath, updater) }
+    return n
+  })
+}
+
+function mergeChildren(oldNodes: FileNode[] | undefined, fresh: FileNode[]): FileNode[] {
+  const oldByPath = new Map((oldNodes ?? []).map((n) => [n.path, n]))
+  return fresh.map((n) => {
+    if (n.type === 'directory') {
+      const prev = oldByPath.get(n.path)
+      if (prev && prev.type === 'directory' && prev.children !== undefined) {
+        return { ...n, children: prev.children }
+      }
+    }
+    return n
+  })
+}
+
+function collectLoadedDirs(nodes: FileNode[], acc: string[] = []): string[] {
+  for (const n of nodes) {
+    if (n.type === 'directory' && n.children !== undefined) {
+      acc.push(n.path)
+      collectLoadedDirs(n.children, acc)
+    }
+  }
+  return acc
 }
 
 function collectFilePaths(nodes: FileNode[]): string[] {
@@ -242,8 +258,10 @@ export default function App() {
   const [activePath, setActivePath] = useState<string | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
   const contentsRef = useRef(contents)
+  const dirPathRef = useRef(dirPath)
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { contentsRef.current = contents }, [contents])
+  useEffect(() => { dirPathRef.current = dirPath }, [dirPath])
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
   const [editingPaths, setEditingPaths] = useState<Set<string>>(new Set())
@@ -381,6 +399,23 @@ export default function App() {
     }
   }, [api, contents])
 
+  const refreshLevel = useCallback(async (targetDir: string) => {
+    const root = dirPathRef.current
+    if (!root) return
+    try {
+      const isRoot = targetDir === root
+      const fresh = isRoot
+        ? await api.loadDirectory(root)
+        : (api.loadChildren ? await api.loadChildren(targetDir, root) : [])
+      if (isRoot) {
+        setTree((prev) => mergeChildren(prev, fresh))
+      } else {
+        setTree((prev) => setNodeChildren(prev, targetDir, (old) => mergeChildren(old, fresh)))
+      }
+    } catch {
+      setError('The directory could not be reloaded. It may have been moved, renamed, or deleted. Please open it again.')
+    }
+  }, [api])
   const handleSaveAs = useCallback(async (name: string) => {
     const untitledPath = saveDialogPath
     if (!untitledPath) return
@@ -399,9 +434,7 @@ export default function App() {
     try {
       await api.writeFile(fullPath, content)
 
-      // Reload the directory to pick up the new file
-      const nodes = await api.loadDirectory(dirPath)
-      setTree(nodes)
+      await refreshLevel(dirPath)
 
       // Replace the untitled tab with the real file path
       const idx = tabs.indexOf(untitledPath)
@@ -437,7 +470,7 @@ export default function App() {
     } catch (err) {
       setError(`Failed to save ${name}: ${(err as Error).message}`)
     }
-  }, [saveDialogPath, dirPath, contents, tabs, api, snapshots])
+  }, [saveDialogPath, dirPath, contents, tabs, api, snapshots, refreshLevel])
 
   const forceCloseTab = useCallback(
     (path: string) => {
@@ -489,13 +522,9 @@ export default function App() {
       setError(`Failed to rename: ${result.error}`)
       return
     }
-    if (dirPath) {
-      try {
-        const nodes = await api.loadDirectory(dirPath)
-        setTree(nodes)
-      } catch {
-        // ignore reload errors
-      }
+    const parentDir = node.path.substring(0, Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'))) || dirPath
+    if (parentDir) {
+      void refreshLevel(parentDir)
     }
     if (node.type === 'directory') {
       const oldPrefix = node.path + '/'
@@ -536,7 +565,7 @@ export default function App() {
       })
       setActivePath((prev) => prev === oldPath ? newPath : prev)
     }
-  }, [renameNode, api, dirPath])
+  }, [renameNode, api, dirPath, refreshLevel])
 
   const handleDelete = useCallback(async () => {
     const node = deleteNode
@@ -558,15 +587,11 @@ export default function App() {
         forceCloseTab(node.path)
       }
     }
-    if (dirPath) {
-      try {
-        const nodes = await api.loadDirectory(dirPath)
-        setTree(nodes)
-      } catch {
-        // ignore reload errors
-      }
+    const parentDir = node.path.substring(0, Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'))) || dirPath
+    if (parentDir) {
+      void refreshLevel(parentDir)
     }
-  }, [deleteNode, api, dirPath, forceCloseTab])
+  }, [deleteNode, api, dirPath, forceCloseTab, refreshLevel])
 
   const closeTab = useCallback(
     (path: string) => {
@@ -692,7 +717,6 @@ export default function App() {
         return
       }
       setTree(nodes)
-      setRootName(nodes[0]?.relativePath.split('/')[0] ?? 'Directory')
       const untitledTabs = tabsRef.current.filter((p) => isUntitledPath(p))
       const untitledContents: Record<string, string> = {}
       for (const p of untitledTabs) {
@@ -717,10 +741,8 @@ export default function App() {
       const rootPath = nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '')
       setDirPath(rootPath || null)
       if (rootPath) {
+        setRootName(rootPath.split(/[\\/]/).pop() ?? 'Directory')
         pushRecentDir(rootPath, rootPath.split(/[\\/]/).pop() || 'Directory')
-      }
-      if (rootPath && api.watchDirectory) {
-        void api.watchDirectory(rootPath)
       }
 
       const filePaths = collectFilePaths(nodes)
@@ -890,11 +912,7 @@ export default function App() {
           : (nodes[0]?.path.slice(0, nodes[0].path.length - nodes[0].relativePath.length).replace(/[/\\]$/, '') || null)
         setDirPath(rootDir)
         setRootName(
-          nodes[0]?.relativePath.split('/')[0] ??
-            (typeof source === 'string'
-              ? source.split('/').pop()
-              : source.name) ??
-            'Directory'
+          (typeof source === 'string' ? source : source.name).split(/[\\/]/).pop() ?? 'Directory'
         )
         if (typeof source === 'string' && rootDir && selectPath === undefined) {
           pushRecentDir(rootDir, rootDir.split(/[\\/]/).pop() || 'Directory')
@@ -918,9 +936,6 @@ export default function App() {
           for (const p of untitledTabs) { if (prev.has(p)) next.add(p) }
           return next
         })
-        if (typeof source === 'string' && api.watchDirectory) {
-          void api.watchDirectory(source)
-        }
         if (selectPath) {
           openFile(selectPath)
         } else {
@@ -935,6 +950,23 @@ export default function App() {
     },
     [api, openFile, pushRecentDir]
   )
+
+  const handleLoadChildren = useCallback(async (node: FileNode) => {
+    const root = dirPathRef.current
+    if (!api.loadChildren || !root) return
+    try {
+      const children = await api.loadChildren(node.path, root)
+      setTree((prev) => setNodeChildren(prev, node.path, () => children))
+    } catch {
+      // silently ignore; the folder will show as empty
+    }
+  }, [api])
+
+  useEffect(() => {
+    if (!api.setWatchedDirs || !dirPath) return
+    const dirs = [dirPath, ...collectLoadedDirs(tree)]
+    void api.setWatchedDirs(dirs)
+  }, [api, tree, dirPath])
 
   useEffect(() => {
     const unsubscribe = api.onDragDrop((source) => {
@@ -970,26 +1002,14 @@ export default function App() {
   useEffect(() => {
     if (!api.onDirectoryChange) return
     const unsubscribe = api.onDirectoryChange((changedPath) => {
-      if (changedPath === dirPath) {
-        void (async () => {
-          try {
-            const nodes = await api.loadDirectory(changedPath)
-            setTree(nodes)
-            setRootName(nodes[0]?.relativePath.split('/')[0] ?? changedPath.split('/').pop() ?? 'Directory')
-          } catch {
-            setError('The directory could not be reloaded. It may have been moved, renamed, or deleted. Please open it again.')
-          }
-        })()
-      }
+      void refreshLevel(changedPath)
     })
     return () => unsubscribe()
-  }, [api, dirPath])
+  }, [api, refreshLevel])
 
   useEffect(() => {
     return () => {
-      if (api.watchDirectory) {
-        void api.watchDirectory(null)
-      }
+      void api.setWatchedDirs?.([])
     }
   }, [api])
 
@@ -1155,7 +1175,7 @@ export default function App() {
 
         <ScrollArea className="flex-1">
           {!isEmpty ? (
-            <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} onRename={api.renamePath ? (node) => setRenameNode(node) : undefined} onDelete={api.deletePath ? (node) => setDeleteNode(node) : undefined} />
+            <FileTree nodes={tree} selectedPath={activePath} onSelect={openFile} onLoadChildren={api.loadChildren ? handleLoadChildren : undefined} onRename={api.renamePath ? (node) => setRenameNode(node) : undefined} onDelete={api.deletePath ? (node) => setDeleteNode(node) : undefined} />
           ) : (
             <>
               <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">

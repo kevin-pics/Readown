@@ -231,89 +231,55 @@ interface TreeNode {
 }
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store'])
-const MAX_FILES = 500
+const PROBE_MAX_DEPTH = 12
+const PROBE_BUDGET = 2000
 
-interface DirQueueItem {
-  dirPath: string
-  parentNode?: TreeNode & { children: TreeNode[] }
+async function hasMarkdownWithin(dirPath: string, depth: number, budget: { left: number }): Promise<boolean> {
+  if (budget.left <= 0 || depth > PROBE_MAX_DEPTH) return true
+  budget.left--
+  let entries
+  try {
+    entries = await readdir(dirPath, { withFileTypes: true })
+  } catch {
+    return false
+  }
+  const subdirs: string[] = []
+  for (const e of entries) {
+    if (EXCLUDED_DIRS.has(e.name)) continue
+    if (e.isFile() && e.name.toLowerCase().endsWith('.md')) return true
+    if (e.isDirectory()) subdirs.push(join(dirPath, e.name))
+  }
+  for (const sd of subdirs) {
+    if (budget.left <= 0) return true
+    if (await hasMarkdownWithin(sd, depth + 1, budget)) return true
+  }
+  return false
 }
 
-async function scanDirectory(dirPath: string, basePath: string): Promise<TreeNode[]> {
-  const rootNodes: TreeNode[] = []
-  let visitedFiles = 0
+async function scanLevel(dirPath: string, basePath: string): Promise<TreeNode[]> {
+  const entries = await readdir(dirPath, { withFileTypes: true })
+  const nodes: TreeNode[] = []
+  const budget = { left: PROBE_BUDGET }
 
-  const processEntries = async (currentDir: string, targetNodes: TreeNode[]) => {
-    const entries = await readdir(currentDir, { withFileTypes: true })
-    const childDirs: { entry: typeof entries[number]; rel: string }[] = []
-
-    for (const entry of entries) {
-      if (EXCLUDED_DIRS.has(entry.name)) continue
-
-      const fullPath = join(currentDir, entry.name)
-      const rel = relative(basePath, fullPath)
-
-      if (entry.isDirectory()) {
-        childDirs.push({ entry, rel })
-      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
-        if (visitedFiles < MAX_FILES) {
-          visitedFiles++
-          targetNodes.push({
-            name: entry.name,
-            path: fullPath,
-            relativePath: rel,
-            type: 'file',
-          })
-        }
+  for (const entry of entries) {
+    if (EXCLUDED_DIRS.has(entry.name)) continue
+    const fullPath = join(dirPath, entry.name)
+    const rel = relative(basePath, fullPath)
+    if (entry.isDirectory()) {
+      if (await hasMarkdownWithin(fullPath, 1, budget)) {
+        nodes.push({ name: entry.name, path: fullPath, relativePath: rel, type: 'directory' })
       }
-    }
-
-    const dirNodes: (TreeNode & { children: TreeNode[] })[] = []
-    for (const { entry, rel } of childDirs) {
-      const dirNode: TreeNode & { children: TreeNode[] } = {
-        name: entry.name,
-        path: join(currentDir, entry.name),
-        relativePath: rel,
-        type: 'directory',
-        children: [],
-      }
-      targetNodes.push(dirNode)
-      dirNodes.push(dirNode)
-    }
-
-    return dirNodes
-  }
-
-  const firstLevel = await processEntries(dirPath, rootNodes)
-  const queue: DirQueueItem[] = firstLevel.map((node) => ({ dirPath: node.path, parentNode: node }))
-
-  while (queue.length > 0) {
-    const batch = queue.splice(0, queue.length)
-    await Promise.all(
-      batch.map(async (item) => {
-        const children = await processEntries(item.dirPath, item.parentNode!.children)
-        for (const child of children) {
-          queue.push({ dirPath: child.path, parentNode: child })
-        }
-      })
-    )
-  }
-
-  if (visitedFiles === 0) {
-    return []
-  }
-
-  const sortNodes = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name)
-      return a.type === 'directory' ? -1 : 1
-    })
-    for (const node of nodes) {
-      if (node.children) sortNodes(node.children)
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      nodes.push({ name: entry.name, path: fullPath, relativePath: rel, type: 'file' })
     }
   }
-  sortNodes(rootNodes)
 
-  return rootNodes
+  nodes.sort((a, b) => {
+    if (a.type === b.type) return a.name.localeCompare(b.name)
+    return a.type === 'directory' ? -1 : 1
+  })
+
+  return nodes
 }
 
 ipcMain.on('close-window', (event) => {
@@ -327,13 +293,20 @@ ipcMain.handle('open-directory', async (): Promise<TreeNode[] | null> => {
   if (result.canceled || result.filePaths.length === 0) return null
 
   const rootPath = result.filePaths[0]
-  return scanDirectory(rootPath, rootPath)
+  return scanLevel(rootPath, rootPath)
 })
 
 ipcMain.handle(
   'scan-directory',
   async (_event: IpcMainInvokeEvent, dirPath: string): Promise<TreeNode[]> => {
-    return scanDirectory(dirPath, dirPath)
+    return scanLevel(dirPath, dirPath)
+  }
+)
+
+ipcMain.handle(
+  'scan-children',
+  async (_event: IpcMainInvokeEvent, dirPath: string, basePath: string): Promise<TreeNode[]> => {
+    return scanLevel(dirPath, basePath)
   }
 )
 
@@ -401,44 +374,56 @@ ipcMain.handle(
   }
 )
 
-let currentWatcher: FSWatcher | null = null
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
+const watchers = new Map<string, FSWatcher>()
+const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function stopWatching() {
-  if (currentWatcher) {
-    void currentWatcher.close()
-    currentWatcher = null
+function scheduleNotify(dirPath: string) {
+  const existing = debounceTimers.get(dirPath)
+  if (existing) clearTimeout(existing)
+  debounceTimers.set(dirPath, setTimeout(() => {
+    debounceTimers.delete(dirPath)
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    win?.webContents.send('directory-changed', dirPath)
+  }, 300))
+}
+
+function addDirWatcher(dirPath: string) {
+  if (watchers.has(dirPath)) return
+  try {
+    const w = chokidar.watch(dirPath, {
+      ignoreInitial: true,
+      ignored: /(^|[/\\])(\.git|node_modules|\.DS_Store)/,
+      persistent: true,
+      depth: 0,
+    })
+    w.on('all', () => scheduleNotify(dirPath))
+    watchers.set(dirPath, w)
+  } catch { /* ignore */ }
+}
+
+function clearAllWatchers() {
+  for (const [p, w] of watchers) {
+    void w.close()
+    const t = debounceTimers.get(p)
+    if (t) { clearTimeout(t); debounceTimers.delete(p) }
   }
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-    debounceTimer = null
-  }
+  watchers.clear()
 }
 
 ipcMain.handle(
-  'watch-directory',
-  (_event: IpcMainInvokeEvent, dirPath: string | null): void => {
-    stopWatching()
-    if (!dirPath) return
-    try {
-      const sendChange = () => {
-        if (debounceTimer) clearTimeout(debounceTimer)
-        debounceTimer = setTimeout(() => {
-          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-          if (win) {
-            win.webContents.send('directory-changed', dirPath)
-          }
-        }, 300)
+  'set-watched-dirs',
+  (_event: IpcMainInvokeEvent, paths: string[]): void => {
+    const next = new Set(paths)
+    for (const [p, w] of watchers) {
+      if (!next.has(p)) {
+        void w.close()
+        watchers.delete(p)
+        const t = debounceTimers.get(p)
+        if (t) { clearTimeout(t); debounceTimers.delete(p) }
       }
-      currentWatcher = chokidar.watch(dirPath, {
-        ignoreInitial: true,
-        ignored: /(^|[/\\])(\.git|node_modules|\.DS_Store)/,
-        persistent: true,
-        depth: 20,
-      })
-      currentWatcher.on('all', sendChange)
-    } catch {
-      stopWatching()
     }
+    for (const p of paths) addDirWatcher(p)
   }
 )
+
+app.on('before-quit', clearAllWatchers)
