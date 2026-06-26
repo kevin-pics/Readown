@@ -223,6 +223,44 @@
   color: var(--prose-heading, hsl(var(--foreground)));
 }
 
+/* Frontmatter collapsible */
+.prose .frontmatter-details {
+  @apply mb-6 rounded-lg border;
+  border-color: var(--prose-table-border, hsl(var(--border)));
+}
+.prose .frontmatter-details summary {
+  @apply cursor-pointer select-none rounded-lg px-4 py-2.5 text-sm font-medium;
+  list-style: none;
+  color: var(--prose-heading, hsl(var(--foreground)));
+}
+.prose .frontmatter-details summary::-webkit-details-marker { display: none; }
+.prose .frontmatter-details summary::before {
+  content: '▸';
+  @apply mr-2 inline-block transition-transform duration-150;
+  color: hsl(var(--muted-foreground));
+}
+.prose .frontmatter-details[open] summary::before {
+  transform: rotate(90deg);
+}
+.prose .frontmatter-details table {
+  @apply mx-4 mb-3 w-auto border-0;
+  font-size: 0.8125rem;
+  background: transparent;
+}
+.prose .frontmatter-details tr { background: transparent !important; }
+.prose .frontmatter-details td {
+  @apply border-0 px-0 py-0.5 align-top;
+}
+.prose .frontmatter-details .fm-key {
+  @apply pr-4 font-mono font-medium;
+  color: var(--prose-heading, hsl(var(--foreground)));
+  white-space: nowrap;
+}
+.prose .frontmatter-details .fm-val {
+  color: var(--prose-text, hsl(var(--foreground)));
+  opacity: 0.75;
+}
+
 /* Chat panel markdown */
 .prose-chat {
   font-size: 0.8125rem;

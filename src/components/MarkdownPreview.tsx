@@ -78,7 +78,42 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
   const searchCaseRef = useRef(false)
   const html = useMemo(() => {
     if (!content) return ''
-    const raw = marked.parse(content) as string
+    let frontmatterHtml = ''
+    let body = content
+    if (content.startsWith('---')) {
+      const match = content.match(/^---[\r\n]([\s\S]*?)[\r\n]---[\r\n]?/)
+      if (match) {
+        body = content.slice(match[0].length)
+        const lines = match[1].split(/\r?\n/)
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const entries: { key: string; values: string[] }[] = []
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(/^([^:]+):\s*(.*)$/)
+          if (!m) continue
+          const key = m[1].trim()
+          const inline = m[2].trim()
+          if (inline) {
+            const values = inline.replace(/^\[|\]$/g, '').split(',').map((t) => t.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+            if (values.length > 0) entries.push({ key, values })
+          } else {
+            const listItems: string[] = []
+            for (let j = i + 1; j < lines.length; j++) {
+              const lm = lines[j].match(/^\s*-\s*(.+)$/)
+              if (!lm) break
+              listItems.push(lm[1].trim().replace(/^['"]|['"]$/g, ''))
+            }
+            if (listItems.length > 0) entries.push({ key, values: listItems })
+          }
+        }
+        if (entries.length > 0) {
+          const rows = entries.map(({ key, values }) =>
+            `<tr><td class="fm-key">${esc(key)}</td><td class="fm-val">${values.map(esc).join(', ')}</td></tr>`
+          ).join('')
+          frontmatterHtml = `<details class="frontmatter-details"><summary>Metadata (${entries.length} fields)</summary><table>${rows}</table></details>`
+        }
+      }
+    }
+    const raw = frontmatterHtml + (marked.parse(body) as string)
     const sanitized = DOMPurify.sanitize(raw, {
       ADD_ATTR: ['src', 'data-mermaid-id', 'data-mermaid-source'],
       ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|tel|file|data):|[^a-z]|[a-z+.-]+(?:[^a-z:]|$))/i,
