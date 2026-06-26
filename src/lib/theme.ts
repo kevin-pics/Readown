@@ -412,3 +412,23 @@ export function storeWidth(width: WidthOption): void {
     // ignore storage access errors
   }
 }
+
+const FRONTMATTER_EXPANDED_KEY = 'readown.frontmatterExpanded'
+
+export function getStoredFrontmatterExpanded(): boolean {
+  try {
+    const val = localStorage.getItem(FRONTMATTER_EXPANDED_KEY)
+    if (val === null) return true
+    return val === 'true'
+  } catch {
+    return true
+  }
+}
+
+export function storeFrontmatterExpanded(value: boolean): void {
+  try {
+    localStorage.setItem(FRONTMATTER_EXPANDED_KEY, String(value))
+  } catch {
+    // ignore storage access errors
+  }
+}

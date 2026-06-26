@@ -38,6 +38,7 @@ interface MarkdownPreviewProps {
   searchFocusTrigger?: number
   onScrollFractionChange?: (fraction: number) => void
   initialScrollFraction?: number
+  frontmatterExpanded?: boolean
 }
 
 
@@ -69,7 +70,7 @@ const codeThemeCss: Record<string, () => Promise<unknown>> = {
   'github-dark': () => import('highlight.js/styles/github-dark.css'),
 }
 
-export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, onToggleChat, isEditing, searchVisible, onSearchClose, searchFocusTrigger, onScrollFractionChange, initialScrollFraction }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelative, onFocus, onAskAI, onToggleEdit, onToggleChat, isEditing, searchVisible, onSearchClose, searchFocusTrigger, onScrollFractionChange, initialScrollFraction, frontmatterExpanded }: MarkdownPreviewProps) {
   const [matchCount, setMatchCount] = useState(0)
   const [currentMatch, setCurrentMatch] = useState(0)
   const matchesRef = useRef<number[]>([])
@@ -109,7 +110,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
           const rows = entries.map(({ key, values }) =>
             `<tr><td class="fm-key">${esc(key)}</td><td class="fm-val">${values.map(esc).join(', ')}</td></tr>`
           ).join('')
-          frontmatterHtml = `<details class="frontmatter-details"><summary>Metadata (${entries.length} fields)</summary><table>${rows}</table></details>`
+          frontmatterHtml = `<details class="frontmatter-details"${frontmatterExpanded ? ' open' : ''}><summary>Metadata (${entries.length} fields)</summary><table>${rows}</table></details>`
         }
       }
     }
@@ -131,7 +132,7 @@ export function MarkdownPreview({ content, filePath, contentWidth, onOpenRelativ
       }
     })
     return container.innerHTML
-  }, [content, filePath])
+  }, [content, filePath, frontmatterExpanded])
 
   useEffect(() => {
     const codeTheme = document.documentElement.style.getPropertyValue('--code-theme').trim() || 'atom-one-light'

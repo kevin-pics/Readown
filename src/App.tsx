@@ -13,7 +13,7 @@ import { DeleteDialog } from '@/components/DeleteDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { hashString, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen, X } from 'lucide-react'
-import { applyFont, applyScale, applyTheme, getStoredFont, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
+import { applyFont, applyScale, applyTheme, getStoredFont, getStoredFrontmatterExpanded, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeFrontmatterExpanded, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import { getStoredChatModels, type ChatModel } from '@/lib/chat'
 
@@ -256,6 +256,7 @@ export default function App() {
   const [font, setFont] = useState<FontOption>(() => getStoredFont())
   const [contentWidth, setContentWidth] = useState<WidthOption>(() => getStoredWidth())
   const [scale, setScale] = useState<ScaleOption>(() => getStoredScale())
+  const [frontmatterExpanded, setFrontmatterExpanded] = useState<boolean>(() => getStoredFrontmatterExpanded())
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [chatWidth, setChatWidth] = useState(() => {
     try { return Number(localStorage.getItem('readown.chatWidth')) || 480 } catch { return 480 }
@@ -307,6 +308,11 @@ export default function App() {
     setScale(newScale)
     applyScale(newScale)
     storeScale(newScale)
+  }, [])
+
+  const handleFrontmatterExpandedChange = useCallback((value: boolean) => {
+    setFrontmatterExpanded(value)
+    storeFrontmatterExpanded(value)
   }, [])
 
   const setActivePathAndCheckModified = useCallback((path: string | null) => {
@@ -1240,6 +1246,7 @@ export default function App() {
                 searchFocusTrigger={searchFocusTrigger}
                 onScrollFractionChange={(fraction) => { previewScrollFractionsRef.current[activePath] = fraction }}
                 initialScrollFraction={previewScrollFractionsRef.current[activePath]}
+                frontmatterExpanded={frontmatterExpanded}
               />
             ) : null}
           </div>
@@ -1271,6 +1278,8 @@ export default function App() {
         onWidthChange={handleWidthChange}
         currentScale={scale}
         onScaleChange={handleScaleChange}
+        frontmatterExpanded={frontmatterExpanded}
+        onFrontmatterExpandedChange={handleFrontmatterExpandedChange}
         models={chatModels}
         onModelsChange={setChatModels}
       />
