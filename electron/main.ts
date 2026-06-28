@@ -234,6 +234,11 @@ const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store'])
 const PROBE_MAX_DEPTH = 12
 const PROBE_BUDGET = 2000
 
+function isSupportedFile(name: string): boolean {
+  const lower = name.toLowerCase()
+  return lower.endsWith('.md') || lower.endsWith('.csv')
+}
+
 async function hasMarkdownWithin(dirPath: string, depth: number, budget: { left: number }): Promise<boolean> {
   if (budget.left <= 0 || depth > PROBE_MAX_DEPTH) return true
   budget.left--
@@ -246,7 +251,7 @@ async function hasMarkdownWithin(dirPath: string, depth: number, budget: { left:
   const subdirs: string[] = []
   for (const e of entries) {
     if (EXCLUDED_DIRS.has(e.name)) continue
-    if (e.isFile() && e.name.toLowerCase().endsWith('.md')) return true
+    if (e.isFile() && isSupportedFile(e.name)) return true
     if (e.isDirectory()) subdirs.push(join(dirPath, e.name))
   }
   for (const sd of subdirs) {
@@ -269,7 +274,7 @@ async function scanLevel(dirPath: string, basePath: string): Promise<TreeNode[]>
       if (await hasMarkdownWithin(fullPath, 1, budget)) {
         nodes.push({ name: entry.name, path: fullPath, relativePath: rel, type: 'directory' })
       }
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+    } else if (entry.isFile() && isSupportedFile(entry.name)) {
       nodes.push({ name: entry.name, path: fullPath, relativePath: rel, type: 'file' })
     }
   }

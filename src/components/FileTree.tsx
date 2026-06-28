@@ -11,8 +11,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { cn } from '@/lib/utils'
-import { ChevronRight, FileText, Folder, FolderOpen, Pencil, Trash2 } from 'lucide-react'
+import { cn, isCsvPath } from '@/lib/utils'
+import { ChevronRight, FileText, Folder, FolderOpen, Pencil, Table, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 interface FileTreeProps {
@@ -86,14 +86,25 @@ function TreeNode({ node, selectedPath, onSelect, onLoadChildren, depth, onRenam
         )}
         style={{ paddingLeft: `${filePad}px` }}
       >
-        <FileText
-          className={cn(
-            'h-4 w-4 shrink-0 transition-colors',
-            selectedPath === node.path
-              ? 'text-primary'
-              : 'text-muted-foreground/70 group-hover:text-foreground'
-          )}
-        />
+        {isCsvPath(node.path) ? (
+          <Table
+            className={cn(
+              'h-4 w-4 shrink-0 transition-colors',
+              selectedPath === node.path
+                ? 'text-primary'
+                : 'text-muted-foreground/70 group-hover:text-foreground'
+            )}
+          />
+        ) : (
+          <FileText
+            className={cn(
+              'h-4 w-4 shrink-0 transition-colors',
+              selectedPath === node.path
+                ? 'text-primary'
+                : 'text-muted-foreground/70 group-hover:text-foreground'
+            )}
+          />
+        )}
         <span className="truncate">{node.name}</span>
       </button>
     )

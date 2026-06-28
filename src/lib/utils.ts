@@ -19,6 +19,57 @@ export function hashString(input: string): string {
   return hash.toString(16)
 }
 
+export function isCsvPath(path: string): boolean {
+  return path.toLowerCase().endsWith('.csv')
+}
+
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let col = ''
+  let row: string[] = []
+  let i = 0
+  const n = text.length
+
+  while (i < n) {
+    const ch = text[i]
+    if (ch === '"') {
+      i++
+      while (i < n) {
+        if (text[i] === '"') {
+          if (text[i + 1] === '"') {
+            col += '"'
+            i += 2
+          } else {
+            i++
+            break
+          }
+        } else {
+          col += text[i++]
+        }
+      }
+    } else if (ch === ',') {
+      row.push(col)
+      col = ''
+      i++
+    } else if (ch === '\r' || ch === '\n') {
+      row.push(col)
+      col = ''
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      rows.push(row)
+      row = []
+      i++
+    } else {
+      col += ch
+      i++
+    }
+  }
+
+  row.push(col)
+  if (row.some((c) => c !== '')) rows.push(row)
+
+  return rows
+}
+
 export function resolveRelativePath(basePath: string, href: string): string | null {
   let target = href.split('#')[0].split('?')[0]
   if (!target) return null

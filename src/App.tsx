@@ -4,6 +4,7 @@ import { ChatPanel } from '@/components/ChatPanel'
 import { FileTree } from '@/components/FileTree'
 import { MarkdownPreview } from '@/components/MarkdownPreview'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
+import { TableViewer } from '@/components/TableViewer'
 import { TabBar } from '@/components/TabBar'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { ConfirmCloseDialog } from '@/components/ConfirmCloseDialog'
@@ -11,7 +12,7 @@ import { SaveDialog } from '@/components/SaveDialog'
 import { RenameDialog } from '@/components/RenameDialog'
 import { DeleteDialog } from '@/components/DeleteDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { hashString, resolveRelativePath } from '@/lib/utils'
+import { hashString, isCsvPath, resolveRelativePath } from '@/lib/utils'
 import { BookOpen, FileText, Folder, FolderOpen, X } from 'lucide-react'
 import { applyFont, applyScale, applyTheme, getStoredFont, getStoredFrontmatterExpanded, getStoredScale, getStoredTheme, getStoredWidth, storeFont, storeFrontmatterExpanded, storeScale, storeTheme, storeWidth, type FontOption, type ScaleOption, type Theme, type WidthOption } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
@@ -59,6 +60,11 @@ function createBrowserAPI(): DirectoryAPI {
   const PROBE_MAX_DEPTH = 12
   const PROBE_BUDGET = 2000
 
+  function isSupportedFileName(name: string): boolean {
+    const lower = name.toLowerCase()
+    return lower.endsWith('.md') || lower.endsWith('.csv')
+  }
+
   async function hasMarkdownWithin(handle: FileSystemDirectoryHandle, depth: number, budget: { left: number }): Promise<boolean> {
     if (budget.left <= 0 || depth > PROBE_MAX_DEPTH) return true
     budget.left--
@@ -66,7 +72,7 @@ function createBrowserAPI(): DirectoryAPI {
     try {
       for await (const entry of handle.values()) {
         if (EXCLUDED.has(entry.name)) continue
-        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) return true
+        if (entry.kind === 'file' && isSupportedFileName(entry.name)) return true
         if (entry.kind === 'directory') subdirs.push(entry as FileSystemDirectoryHandle)
       }
     } catch {
@@ -91,7 +97,7 @@ function createBrowserAPI(): DirectoryAPI {
         if (await hasMarkdownWithin(dirHandle, 1, budget)) {
           nodes.push({ name: entry.name, path: rel, relativePath: rel, type: 'directory' })
         }
-      } else if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
+      } else if (entry.kind === 'file' && isSupportedFileName(entry.name)) {
         fileHandles.set(rel, entry as FileSystemFileHandle)
         nodes.push({ name: entry.name, path: rel, relativePath: rel, type: 'file' })
       }
@@ -680,7 +686,7 @@ export default function App() {
       const resolved = resolveRelativePath(activePath, href)
       if (!resolved) return
       const lowerExt = resolved.toLowerCase()
-      if (lowerExt.endsWith('.md') || lowerExt.endsWith('.markdown') || lowerExt.endsWith('.mdx')) {
+      if (lowerExt.endsWith('.md') || lowerExt.endsWith('.markdown') || lowerExt.endsWith('.mdx') || lowerExt.endsWith('.csv')) {
         openFile(resolved)
       } else {
         window.readownAPI?.openLocalLink(resolved)
@@ -986,7 +992,7 @@ export default function App() {
           const isDir = await window.readownAPI.isDirectory(openFile)
           if (isDir) {
             loadDirectory(openFile)
-          } else if (openFile.toLowerCase().endsWith('.md')) {
+          } else if (openFile.toLowerCase().endsWith('.md') || openFile.toLowerCase().endsWith('.csv')) {
             const parentDir = openFile.substring(0, Math.max(openFile.lastIndexOf('/'), openFile.lastIndexOf('\\')))
             if (parentDir) {
               loadDirectory(parentDir, openFile)
@@ -1090,7 +1096,7 @@ export default function App() {
         await loadDirectory(droppedPath)
         return
       }
-      if (droppedPath.toLowerCase().endsWith('.md')) {
+      if (droppedPath.toLowerCase().endsWith('.md') || droppedPath.toLowerCase().endsWith('.csv')) {
         const dirPath = droppedPath.substring(0, droppedPath.lastIndexOf('/')) || droppedPath.substring(0, droppedPath.lastIndexOf('\\'))
         if (dirPath) {
           await loadDirectory(dirPath, droppedPath)
@@ -1237,7 +1243,16 @@ export default function App() {
         <TabBar tabs={tabs} activePath={activePath} modifiedPaths={modifiedTabs} unsavedPaths={unsavedChanges} editingPaths={editingPaths} onActivate={setActivePathAndCheckModified} onClose={closeTab} />
         <div className="flex flex-1 overflow-hidden">
           <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-            {activePath && editingPaths.has(activePath) ? (
+            {activePath && isCsvPath(activePath) && !editingPaths.has(activePath) ? (
+              <TableViewer
+                key={activePath}
+                content={contents[activePath] ?? ''}
+                filePath={activePath}
+                contentWidth={contentWidth.value}
+                onToggleEdit={() => toggleEditMode(activePath)}
+                onToggleChat={() => setChatOpen((v) => !v)}
+              />
+            ) : activePath && editingPaths.has(activePath) ? (
               <MarkdownEditor
                 key={activePath}
                 content={contents[activePath] ?? ''}
