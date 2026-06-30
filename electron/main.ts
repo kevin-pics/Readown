@@ -381,14 +381,30 @@ ipcMain.handle(
 
 const watchers = new Map<string, FSWatcher>()
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const followupTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function sendDirectoryChanged(dirPath: string) {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send('directory-changed', dirPath)
+}
+
+function clearFollowup(dirPath: string) {
+  const ft = followupTimers.get(dirPath)
+  if (ft) { clearTimeout(ft); followupTimers.delete(dirPath) }
+}
 
 function scheduleNotify(dirPath: string) {
   const existing = debounceTimers.get(dirPath)
   if (existing) clearTimeout(existing)
   debounceTimers.set(dirPath, setTimeout(() => {
     debounceTimers.delete(dirPath)
-    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-    win?.webContents.send('directory-changed', dirPath)
+    sendDirectoryChanged(dirPath)
+    // Second scan ~1.2s later catches content that lands after the initial probe
+    clearFollowup(dirPath)
+    followupTimers.set(dirPath, setTimeout(() => {
+      followupTimers.delete(dirPath)
+      sendDirectoryChanged(dirPath)
+    }, 1200))
   }, 300))
 }
 
@@ -400,6 +416,7 @@ function addDirWatcher(dirPath: string) {
       ignored: /(^|[/\\])(\.git|node_modules|\.DS_Store)/,
       persistent: true,
       depth: 0,
+      awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
     })
     w.on('all', () => scheduleNotify(dirPath))
     watchers.set(dirPath, w)
@@ -411,6 +428,7 @@ function clearAllWatchers() {
     void w.close()
     const t = debounceTimers.get(p)
     if (t) { clearTimeout(t); debounceTimers.delete(p) }
+    clearFollowup(p)
   }
   watchers.clear()
 }
@@ -425,6 +443,7 @@ ipcMain.handle(
         watchers.delete(p)
         const t = debounceTimers.get(p)
         if (t) { clearTimeout(t); debounceTimers.delete(p) }
+        clearFollowup(p)
       }
     }
     for (const p of paths) addDirWatcher(p)

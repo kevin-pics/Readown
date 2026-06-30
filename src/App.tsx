@@ -265,9 +265,11 @@ export default function App() {
   const [contents, setContents] = useState<Record<string, string>>({})
   const contentsRef = useRef(contents)
   const dirPathRef = useRef(dirPath)
+  const treeRef = useRef(tree)
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { contentsRef.current = contents }, [contents])
   useEffect(() => { dirPathRef.current = dirPath }, [dirPath])
+  useEffect(() => { treeRef.current = tree }, [tree])
   const [snapshots, setSnapshots] = useState<Record<string, string>>({})
   const [modifiedTabs, setModifiedTabs] = useState<Set<string>>(new Set())
   const [editingPaths, setEditingPaths] = useState<Set<string>>(new Set())
@@ -1012,6 +1014,26 @@ export default function App() {
     })
     return () => unsubscribe()
   }, [api, refreshLevel])
+
+  useEffect(() => {
+    let last = 0
+    const rescan = () => {
+      if (document.hidden) return
+      const now = Date.now()
+      if (now - last < 500) return
+      last = now
+      const root = dirPathRef.current
+      if (!root) return
+      void refreshLevel(root)
+      for (const d of collectLoadedDirs(treeRef.current)) void refreshLevel(d)
+    }
+    window.addEventListener('focus', rescan)
+    document.addEventListener('visibilitychange', rescan)
+    return () => {
+      window.removeEventListener('focus', rescan)
+      document.removeEventListener('visibilitychange', rescan)
+    }
+  }, [refreshLevel])
 
   useEffect(() => {
     return () => {
