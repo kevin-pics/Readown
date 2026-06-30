@@ -1192,7 +1192,7 @@ export default function App() {
             <span className="flex-1">{error}</span>
             <button
               onClick={() => setError(null)}
-              className="-my-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md leading-none hover:text-destructive/80 focus:outline-none"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md leading-none hover:bg-destructive/10 hover:text-destructive/80 focus:outline-none"
               aria-label="Dismiss error"
               title="Dismiss"
             >
